@@ -503,7 +503,7 @@
         <div class="grid-2">
           <div class="card">
             <h2 class="page-title" style="font-size:1.1rem">Users</h2>
-            <table><thead><tr><th>Email</th><th>Role</th><th>Active</th></tr></thead><tbody id="users-tbody"></tbody></table>
+            <table><thead><tr><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead><tbody id="users-tbody"></tbody></table>
           </div>
           <div class="card">
             <h2 class="page-title" style="font-size:1.1rem">Invites</h2>
@@ -750,8 +750,23 @@
     async function refreshUsers() {
       if (currentUser?.role !== 'admin') return;
       const [{ users }, { invites }] = await Promise.all([api('/users'), api('/invites')]);
-      $('users-tbody').innerHTML = (users || []).map((u) => `<tr><td>${u.email}</td><td>${u.role}</td><td>${u.is_active ? 'yes' : 'no'}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No users.</td></tr>';
-      $('invites-tbody').innerHTML = (invites || []).map((i) => `<tr><td>${i.label || '—'}</td><td>${i.used_count}/${i.max_uses}</td><td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-invite-del="${i.id}">Disable</button></td></tr>`).join('') || '<tr><td colspan="3" class="muted">No invites.</td></tr>';
+      $('users-tbody').innerHTML = (users || []).map((u) =>
+        `<tr><td>${u.email}</td><td>${u.role}</td><td>${u.is_active ? 'yes' : 'no'}</td>
+        <td>${u.id === currentUser?.userId ? '<span class="muted">you</span>' : `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-user-del="${u.id}">Delete</button>`}</td></tr>`
+      ).join('') || '<tr><td colspan="4" class="muted">No users.</td></tr>';
+      $('users-tbody').querySelectorAll('[data-user-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Delete this user? Their API keys will be revoked.')) return;
+          await api('/users/' + btn.dataset.userDel, { method: 'DELETE' });
+          await refreshUsers();
+          await refreshKeys();
+        };
+      });
+
+      $('invites-tbody').innerHTML = (invites || []).map((i) => {
+        const inactive = !i.is_active || i.used_count >= i.max_uses;
+        return `<tr><td>${i.label || '—'}</td><td>${i.used_count}/${i.max_uses}${!i.is_active ? '<br><span class="muted">disabled</span>' : ''}</td><td>${inactive ? '<span class="muted">—</span>' : `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-invite-del="${i.id}">Disable</button>`}</td></tr>`;
+      }).join('') || '<tr><td colspan="3" class="muted">No invites.</td></tr>';
       $('invites-tbody').querySelectorAll('[data-invite-del]').forEach((btn) => {
         btn.onclick = async () => {
           await api('/invites/' + btn.dataset.inviteDel, { method: 'DELETE' });

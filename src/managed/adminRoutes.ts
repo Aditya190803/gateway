@@ -131,7 +131,7 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     const role = user.role === 'admin' ? 'admin' : 'user';
     const jwt = await createAdminToken(user.id, user.email, role, secret);
     c.header('Set-Cookie', setAdminSessionCookie(jwt));
-    return c.json({ authenticated: true, email: user.email, role });
+    return c.json({ authenticated: true, userId: user.id, email: user.email, role });
   });
 
   admin.post('/signup', async (c) => {
@@ -194,7 +194,7 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
   admin.get('/session', async (c) => {
     const auth = await requireSession(c);
     if (!auth.ok) return auth.response;
-    return c.json({ authenticated: true, email: auth.user.email, role: auth.user.role });
+    return c.json({ authenticated: true, userId: auth.user.userId, email: auth.user.email, role: auth.user.role });
   });
 
   admin.post('/logout', async (c) => {
@@ -360,6 +360,23 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
       `SELECT id, email, role, is_active, created_at FROM users ORDER BY id DESC`
     ).all();
     return c.json({ users: rows.results ?? [] });
+  });
+
+  admin.delete('/users/:id', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const id = parseInt(c.req.param('id'), 10);
+    if (!Number.isFinite(id)) {
+      return c.json({ status: 'failure', message: 'Invalid user id' }, 400);
+    }
+    if (id === auth.user.userId) {
+      return c.json({ status: 'failure', message: 'You cannot delete your own admin account' }, 400);
+    }
+    await c.env.DB.batch([
+      c.env.DB.prepare(`UPDATE users SET is_active = 0 WHERE id = ?`).bind(id),
+      c.env.DB.prepare(`UPDATE api_keys SET is_active = 0 WHERE user_id = ?`).bind(id),
+    ]);
+    return c.json({ status: 'success' });
   });
 
   admin.get('/invites', async (c) => {
