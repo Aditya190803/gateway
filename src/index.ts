@@ -15,6 +15,9 @@ import { getRuntimeKey } from 'hono/adapter';
 import { requestValidator } from './middlewares/requestValidator';
 import { hooks } from './middlewares/hooks';
 import { memoryCache } from './middlewares/cache';
+import { managedProxyMiddleware } from './middlewares/managedProxy';
+import { createAdminApp } from './managed/adminRoutes';
+import adminDashboardHtml from './public/admin-dashboard.html';
 
 // Handlers
 import { proxyHandler } from './handlers/proxyHandler';
@@ -90,6 +93,36 @@ if (runtime === 'node') {
  * Returns a greeting message.
  */
 app.get('/', (c) => c.text('AI Gateway says hey!'));
+
+app.get('/health', async (c) => {
+  const env = c.env as { DB?: D1Database };
+  let db: 'ok' | 'missing' | 'error' = 'missing';
+  if (env.DB) {
+    try {
+      await env.DB.prepare('SELECT 1').first();
+      db = 'ok';
+    } catch {
+      db = 'error';
+    }
+  }
+  return c.json({
+    status: 'ok',
+    managed_proxy: db === 'ok',
+    db,
+  });
+});
+
+const adminApp = createAdminApp();
+app.route('/admin', adminApp);
+app.get('/admin/dashboard', (c) =>
+  c.html(adminDashboardHtml, 200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+  })
+);
+
+// Managed proxy: user API keys, routing, provider credentials (before route handlers)
+app.use('*', managedProxyMiddleware);
 
 // Use prettyJSON middleware for all routes
 app.use('*', prettyJSON());
