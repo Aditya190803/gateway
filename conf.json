@@ -1,21 +1,5 @@
 {
-  "plugins_enabled": [
-    "default",
-    "portkey",
-    "qualifire",
-    "aporia",
-    "sydelabs",
-    "pillar",
-    "patronus",
-    "pangea",
-    "promptsecurity",
-    "panw-prisma-airs",
-    "walledai"
-  ],
-  "credentials": {
-    "portkey": {
-      "apiKey": "..."
-    }
-  },
+  "plugins_enabled": [],
+  "credentials": {},
   "cache": false
 }

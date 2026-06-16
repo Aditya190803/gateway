@@ -1,7 +1,18 @@
-name = "rubeus"
+name = "ai-gateway"
 compatibility_date = "2024-12-05"
 main = "src/index.ts"
 compatibility_flags = [ "nodejs_compat" ]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-gateway-db"
+database_id = "77747cfb-c7c1-4090-8eda-1a2b00f39517"
+migrations_dir = "migrations"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
 
 [vars]
 ENVIRONMENT = 'dev'
@@ -11,7 +22,7 @@ CUSTOM_HEADERS_TO_IGNORE = []
 #Configuration for DEVELOPMENT environment
 #
 [env.staging]
-name = "rubeus-dev"
+name = "ai-gateway-dev"
 
 [env.staging.vars]
 ENVIRONMENT = 'staging'
@@ -22,7 +33,7 @@ CUSTOM_HEADERS_TO_IGNORE = []
 #Configuration for PRODUCTION environment
 #
 [env.production]
-name = "rubeus"
+name = "ai-gateway"
 logpush=true
 
 [env.production.vars]

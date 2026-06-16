@@ -132,6 +132,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 .dev.vars
+OPERATOR_CREDENTIALS.local.md
 
 # Rollup build dir
 build

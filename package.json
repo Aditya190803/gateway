@@ -24,21 +24,17 @@
   ],
   "scripts": {
     "dev": "npm run dev:workerd",
-    "dev:node": "tsx src/start-server.ts",
+
     "dev:workerd": "wrangler dev src/index.ts",
+    "db:migrate:local": "wrangler d1 migrations apply ai-gateway-db --local",
+    "db:migrate": "wrangler d1 migrations apply ai-gateway-db",
     "deploy": "wrangler deploy --minify src/index.ts",
     "pretty": "prettier --write \"./**/*.{js,jsx,ts,tsx,json}\"",
-    "build": "rollup -c",
-    "build-plugins": "tsx plugins/build.ts",
+    "build": "wrangler deploy --dry-run --outdir=build src/index.ts",
     "prepublishOnly": "npm run build",
-    "start:node": "node build/start-server.js",
+
     "format": "prettier --write \"./**/*.{js,jsx,ts,tsx,json}\"",
-    "format:check": "prettier --check \"./**/*.{js,jsx,ts,tsx,json}\"",
-    "test:gateway": "jest src/",
-    "test:plugins": "jest plugins/",
-    "pre-push": "npm run build && node start-test.js",
-    "prepare": "node -e \"if (process.env.NODE_ENV !== 'production'){process.exit(1)} \" || husky",
-    "postinstall": "patch-package"
+    "format:check": "prettier --check \"./**/*.{js,jsx,ts,tsx,json}\""
   },
   "dependencies": {
     "@aws-crypto/sha256-js": "^5.2.0",
@@ -50,8 +46,9 @@
     "@types/mustache": "^4.2.5",
     "async-retry": "^1.3.3",
     "avsc": "^5.7.7",
-    "ioredis": "^5.8.0",
+    "bcryptjs": "^3.0.3",
     "hono": "^4.9.7",
+    "ioredis": "^5.8.0",
     "jose": "^6.0.11",
     "patch-package": "^8.0.1",
     "ws": "^8.18.0",
@@ -63,6 +60,7 @@
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^11.1.5",
     "@types/async-retry": "^1.4.5",
+    "@types/bcryptjs": "^2.4.6",
     "@types/jest": "^29.5.12",
     "@types/node": "20.8.3",
     "@types/ws": "^8.5.12",
@@ -77,6 +75,5 @@
     "typescript-eslint": "^8.1.0",
     "wrangler": "^3.97.0"
   },
-  "bin": "build/start-server.js",
   "type": "module"
 }
