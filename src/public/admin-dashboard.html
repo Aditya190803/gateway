@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gateway Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #f8f6f3;
+      --paper-2: #fff;
+      --ink: #1a1814;
+      --ink-2: #4a4640;
+      --ink-3: #8a847c;
+      --line: #e8e4de;
+      --accent: #c45c26;
+      --accent-hover: #a34a1c;
+      --accent-bg: rgba(196, 92, 38, 0.08);
+      --blue: #2563eb;
+      --blue-bg: rgba(37, 99, 235, 0.08);
+      --danger: #b91c1c;
+      --danger-bg: rgba(185, 28, 28, 0.06);
+      --ok: #15803d;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --font: "Figtree", system-ui, sans-serif;
+      --mono: "JetBrains Mono", monospace;
+      --shadow: 0 1px 2px rgba(26, 24, 20, 0.04), 0 12px 40px rgba(26, 24, 20, 0.06);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      font-size: 15px;
+      line-height: 1.55;
+      color: var(--ink);
+      background: var(--paper);
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .app { display: flex; min-height: 100vh; }
+    .sidebar {
+      width: 240px;
+      flex-shrink: 0;
+      background: var(--paper-2);
+      border-right: 1px solid var(--line);
+      padding: 1.75rem 1.25rem;
+      display: none;
+    }
+    @media (min-width: 900px) { .sidebar { display: flex; flex-direction: column; } }
+    .sidebar .logo {
+      font-weight: 700;
+      font-size: 1.125rem;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.25rem;
+    }
+    .sidebar .tag { font-size: 0.75rem; color: var(--ink-3); margin-bottom: 2rem; }
+    .nav-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 0.65rem 0.85rem;
+      margin-bottom: 0.35rem;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      font-family: var(--font);
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--ink-2);
+      cursor: pointer;
+    }
+    .nav-btn:hover { background: var(--paper); color: var(--ink); }
+    .nav-btn.active { background: var(--accent-bg); color: var(--accent); }
+    .sidebar .spacer { flex: 1; }
+    .main { flex: 1; padding: 1.5rem 1.25rem 3rem; max-width: 920px; margin: 0 auto; width: 100%; }
+    .mobile-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+    @media (min-width: 900px) { .mobile-head .tabs { display: none; } }
+    .tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+    .tabs button {
+      padding: 0.45rem 0.75rem;
+      font-size: 0.8125rem;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: var(--paper-2);
+      color: var(--ink-2);
+      cursor: pointer;
+      font-family: var(--font);
+      font-weight: 500;
+    }
+    .tabs button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+    .panel { display: none; animation: fade 0.2s ease; }
+    .panel.active { display: block; }
+    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+    .card {
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 1.5rem 1.625rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.25rem;
+    }
+    .login-wrap {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 2rem;
+      background: linear-gradient(160deg, var(--paper) 0%, #efe9e0 100%);
+    }
+    .login-card {
+      width: 100%;
+      max-width: 400px;
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 2rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+    .login-card h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      margin: 0 0 0.35rem;
+    }
+    .muted { color: var(--ink-3); font-size: 0.875rem; margin: 0 0 1.5rem; }
+    h2.page-title {
+      font-size: 1.375rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin: 0 0 0.35rem;
+    }
+    .section-lead { color: var(--ink-3); font-size: 0.875rem; margin: 0 0 1.25rem; }
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--ink-2);
+      margin-bottom: 0.4rem;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: var(--paper-2);
+      font-family: var(--font);
+      font-size: 0.9375rem;
+      color: var(--ink);
+      margin-bottom: 1rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-bg);
+    }
+    .field-password { position: relative; margin-bottom: 1rem; }
+    .field-password input { margin-bottom: 0; padding-right: 3.25rem; }
+    button.toggle-pw {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 2.5rem;
+      height: 2.35rem;
+      border: none;
+      border-radius: 8px;
+      background: var(--paper) !important;
+      color: var(--ink-3);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      padding: 0;
+      font-size: 0;
+    }
+    button.toggle-pw:hover { color: var(--ink); background: var(--line) !important; }
+    button.toggle-pw svg { width: 20px; height: 20px; }
+    .btn {
+      font-family: var(--font);
+      font-weight: 600;
+      font-size: 0.875rem;
+      padding: 0.65rem 1.2rem;
+      border-radius: var(--radius-sm);
+      border: none;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary {
+      background: var(--paper-2);
+      color: var(--ink-2);
+      border: 1px solid var(--line);
+    }
+    .btn-secondary:hover { border-color: var(--ink-3); color: var(--ink); }
+    .btn-blue { background: var(--blue); color: #fff; }
+    .btn-blue:hover { background: #1d4ed8; }
+    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .grid-2 { display: grid; gap: 1rem; }
+    @media (min-width: 600px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+    .provider-pick {
+      position: relative;
+      margin-bottom: 1rem;
+    }
+    .provider-pick input { margin-bottom: 0; }
+    .provider-dropdown {
+      position: absolute;
+      z-index: 50;
+      left: 0;
+      right: 0;
+      top: 100%;
+      margin-top: 4px;
+      max-height: 280px;
+      overflow-y: auto;
+      background: var(--paper-2);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow);
+      display: none;
+    }
+    .provider-dropdown.open { display: block; }
+    .provider-opt {
+      padding: 0.65rem 0.9rem;
+      cursor: pointer;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.875rem;
+    }
+    .provider-opt:last-child { border-bottom: none; }
+    .provider-opt:hover { background: var(--paper); }
+    .provider-opt strong { display: block; font-weight: 600; }
+    .provider-opt span { font-size: 0.75rem; color: var(--ink-3); font-family: var(--mono); }
+    .badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      margin-left: 0.35rem;
+      vertical-align: middle;
+    }
+    .badge-live { background: var(--blue-bg); color: var(--blue); }
+    .badge-manual { background: var(--paper); color: var(--ink-3); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    th, td { text-align: left; padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--line); }
+    th { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    .num { text-align: right; font-family: var(--mono); font-size: 0.75rem; }
+    .err {
+      color: var(--danger);
+      font-size: 0.8125rem;
+      padding: 0.65rem 0.85rem;
+      background: var(--danger-bg);
+      border-radius: var(--radius-sm);
+      margin-top: 0.75rem;
+    }
+    .ok-msg { color: var(--ok); font-size: 0.8125rem; font-weight: 500; }
+    .hidden { display: none !important; }
+    .key-box {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: var(--paper);
+      border-radius: var(--radius-sm);
+      border: 1px dashed var(--line);
+    }
+    .key-box code {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      word-break: break-all;
+      color: var(--ok);
+      margin: 0.5rem 0;
+    }
+    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
+    @media (min-width: 600px) { .stats { grid-template-columns: repeat(4, 1fr); } }
+    .stat {
+      padding: 1rem;
+      background: var(--paper);
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--line);
+    }
+    .stat b { display: block; font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; }
+    .stat small { color: var(--ink-3); font-size: 0.75rem; }
+    .chart { display: flex; align-items: flex-end; gap: 5px; height: 100px; margin: 1rem 0; }
+    .chart .bar {
+      flex: 1;
+      max-width: 36px;
+      background: var(--accent);
+      border-radius: 4px 4px 0 0;
+      min-height: 4px;
+    }
+    .model-preview {
+      max-height: 160px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      background: var(--paper);
+      padding: 0.75rem;
+      border-radius: var(--radius-sm);
+      margin-top: 0.75rem;
+      line-height: 1.6;
+      color: var(--ink-2);
+    }
+    .linkish {
+      background: none;
+      border: none;
+      color: var(--blue);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      padding: 0;
+      font-family: var(--font);
+    }
+    .linkish:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div id="login-screen" class="login-wrap">
+    <div class="login-card">
+      <h1 id="login-title">Sign in</h1>
+      <p class="muted" id="login-sub">Sign in or create an invited user account.</p>
+      <div id="setup-block" class="hidden">
+        <p class="ok-msg" style="margin-bottom:1rem">First-time setup — create your admin account.</p>
+      </div>
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="username" placeholder="you@company.com" />
+      <div id="invite-field" class="hidden">
+        <label for="invite-code">Invite code</label>
+        <input id="invite-code" autocomplete="off" placeholder="inv-…" />
+      </div>
+      <label for="password">Password</label>
+      <div class="field-password">
+        <input type="password" id="password" autocomplete="current-password" placeholder="Your password" />
+        <button type="button" class="toggle-pw" data-target="password" aria-label="Show password">
+          <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="icon-hide hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="login-btn">Sign in</button>
+        <button type="button" class="btn btn-secondary" id="signup-mode-btn">Use invite</button>
+        <button type="button" class="btn btn-primary hidden" id="signup-btn">Create account</button>
+        <button type="button" class="btn btn-secondary hidden" id="setup-btn">Create admin</button>
+      </div>
+      <p id="login-err" class="err hidden"></p>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <aside class="sidebar">
+      <div class="logo">Gateway</div>
+      <div class="tag">Managed proxy</div>
+      <button type="button" class="nav-btn active admin-only" data-panel="providers">Providers</button>
+      <button type="button" class="nav-btn" data-panel="keys">API keys</button>
+      <button type="button" class="nav-btn" data-panel="usage">Usage</button>
+      <button type="button" class="nav-btn admin-only" data-panel="users">Users</button>
+      <div class="spacer"></div>
+      <button type="button" class="nav-btn" id="logout-btn">Sign out</button>
+    </aside>
+    <div class="main">
+      <div class="mobile-head">
+        <div>
+          <div class="logo" style="font-weight:700">Gateway</div>
+        </div>
+        <button type="button" class="btn btn-secondary" id="logout-mobile-btn">Sign out</button>
+        <div class="tabs">
+          <button type="button" class="active admin-only" data-panel="providers">Providers</button>
+          <button type="button" data-panel="keys">Keys</button>
+          <button type="button" data-panel="usage">Usage</button>
+          <button type="button" class="admin-only" data-panel="users">Users</button>
+        </div>
+      </div>
+
+      <section id="panel-providers" class="panel active">
+        <h2 class="page-title">Providers</h2>
+        <p class="section-lead">Connect LLM backends. Fetch live models from provider APIs (OpenAI <code style="font-size:0.8em">GET /v1/models</code>, Anthropic, Google, OpenRouter, etc.).</p>
+        <div class="card">
+          <label>Search gateway providers <span id="catalog-count" class="muted"></span></label>
+          <div class="provider-pick">
+            <input type="text" id="provider-search" placeholder="Type to search 70+ providers…" autocomplete="off" />
+            <div id="provider-dropdown" class="provider-dropdown"></div>
+          </div>
+          <div class="grid-2">
+            <div>
+              <label for="p-id">Provider ID</label>
+              <input id="p-id" placeholder="openai" />
+            </div>
+            <div>
+              <label for="p-name">Display name</label>
+              <input id="p-name" placeholder="OpenAI" />
+            </div>
+          </div>
+          <label for="p-key">API key</label>
+          <div class="field-password">
+            <input id="p-key" type="password" autocomplete="off" placeholder="Provider secret key" />
+            <button type="button" class="toggle-pw" data-target="p-key" aria-label="Show API key">
+              <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              <svg class="icon-hide hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            </button>
+          </div>
+          <label for="p-models">Routing prefixes (JSON)</label>
+          <input id="p-models" placeholder='["gpt-","claude-"]' />
+          <div class="btn-row">
+            <button type="button" class="btn btn-blue" id="fetch-models-btn">Fetch latest models</button>
+            <button type="button" class="btn btn-primary" id="save-provider">Save provider</button>
+          </div>
+          <p id="fetch-status" class="muted hidden" style="margin-top:0.75rem;margin-bottom:0"></p>
+          <div id="model-preview" class="model-preview hidden"></div>
+        </div>
+        <div class="card">
+          <h2 class="page-title" style="font-size:1.1rem">Configured</h2>
+          <table>
+            <thead><tr><th>Provider</th><th>Prefixes</th><th>Models</th><th></th></tr></thead>
+            <tbody id="providers-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-keys" class="panel">
+        <h2 class="page-title">User API keys</h2>
+        <p class="section-lead">Keys your apps use with <code style="font-size:0.85em">Authorization: Bearer sk-…</code></p>
+        <div class="card">
+          <div class="grid-2" style="margin-bottom:0">
+            <input id="k-label" placeholder="Label" aria-label="Label" />
+            <div class="grid-2">
+              <input id="k-rpm" type="number" placeholder="RPM limit" aria-label="RPM" />
+              <input id="k-tokens" type="number" placeholder="Monthly tokens" aria-label="Tokens" />
+            </div>
+          </div>
+          <button type="button" class="btn btn-primary" id="create-key" style="margin-top:1rem">Create key</button>
+          <div id="new-key-box" class="key-box hidden">
+            <span class="ok-msg">Copy now — shown once</span>
+            <code id="new-key-text"></code>
+            <button type="button" class="btn btn-secondary" id="copy-key-btn">Copy</button>
+          </div>
+        </div>
+        <div class="card">
+          <table>
+            <thead><tr><th>Key</th><th>Label</th><th>RPM</th><th>Monthly</th><th></th></tr></thead>
+            <tbody id="keys-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-users" class="panel admin-only">
+        <h2 class="page-title">Users & invites</h2>
+        <p class="section-lead">Create invite codes for users. Invite codes are shown once.</p>
+        <div class="card">
+          <div class="grid-2" style="margin-bottom:0">
+            <input id="invite-label" placeholder="Invite label" aria-label="Invite label" />
+            <input id="invite-max" type="number" min="1" max="1000" value="1" placeholder="Max uses" aria-label="Max uses" />
+          </div>
+          <button type="button" class="btn btn-primary" id="create-invite" style="margin-top:1rem">Create invite</button>
+          <div id="new-invite-box" class="key-box hidden">
+            <span class="ok-msg">Copy now — shown once</span>
+            <code id="new-invite-text"></code>
+            <button type="button" class="btn btn-secondary" id="copy-invite-btn">Copy</button>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h2 class="page-title" style="font-size:1.1rem">Users</h2>
+            <table><thead><tr><th>Email</th><th>Role</th><th>Active</th></tr></thead><tbody id="users-tbody"></tbody></table>
+          </div>
+          <div class="card">
+            <h2 class="page-title" style="font-size:1.1rem">Invites</h2>
+            <table><thead><tr><th>Label</th><th>Used</th><th></th></tr></thead><tbody id="invites-tbody"></tbody></table>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-usage" class="panel">
+        <h2 class="page-title">Usage</h2>
+        <div class="card">
+          <div class="btn-row" style="margin-bottom:1rem">
+            <select id="usage-days" aria-label="Period" style="width:auto;margin:0">
+              <option value="7">7 days</option>
+              <option value="30" selected>30 days</option>
+              <option value="90">90 days</option>
+            </select>
+            <button type="button" class="btn btn-secondary" id="refresh-usage">Refresh</button>
+          </div>
+          <div class="stats" id="usage-stats"></div>
+          <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">Daily requests</p>
+          <div class="chart" id="usage-chart"></div>
+          <div class="grid-2">
+            <table><thead><tr><th>Provider</th><th class="num">Req</th><th class="num">Tok</th></tr></thead><tbody id="usage-by-provider"></tbody></table>
+            <table><thead><tr><th>Key</th><th class="num">Req</th><th class="num">Tok</th></tr></thead><tbody id="usage-by-key"></tbody></table>
+          </div>
+          <table style="margin-top:1rem"><thead><tr><th>Model</th><th>Provider</th><th class="num">Req</th></tr></thead><tbody id="usage-by-model"></tbody></table>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let catalog = [];
+    let currentUser = null;
+    let signupMode = false;
+
+    document.querySelectorAll('.toggle-pw').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const input = $(btn.dataset.target);
+        if (!input) return;
+        const show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        btn.querySelector('.icon-show')?.classList.toggle('hidden', show);
+        btn.querySelector('.icon-hide')?.classList.toggle('hidden', !show);
+      });
+    });
+
+    async function api(path, opts = {}) {
+      const r = await fetch('/admin' + path, { credentials: 'include', headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }, ...opts });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.message || data.error || r.statusText);
+      return data;
+    }
+
+    function showPanel(name) {
+      if ((name === 'providers' || name === 'users') && currentUser?.role !== 'admin') name = 'keys';
+      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      document.querySelectorAll('[data-panel]').forEach((b) => b.classList.toggle('active', b.dataset.panel === name));
+      $('panel-' + name)?.classList.add('active');
+    }
+
+    function applyRoleUI() {
+      const isAdmin = currentUser?.role === 'admin';
+      document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdmin));
+      $('k-rpm').disabled = !isAdmin;
+      $('k-tokens').disabled = !isAdmin;
+      if (!isAdmin) {
+        $('k-rpm').placeholder = 'Set by admin';
+        $('k-tokens').placeholder = 'Set by admin';
+      }
+      showPanel(isAdmin ? 'providers' : 'keys');
+    }
+
+    function setSignupMode(on) {
+      signupMode = on;
+      $('invite-field').classList.toggle('hidden', !on);
+      $('signup-btn').classList.toggle('hidden', !on);
+      $('login-btn').classList.toggle('hidden', on);
+      $('signup-mode-btn').textContent = on ? 'Back to sign in' : 'Use invite';
+      $('login-title').textContent = on ? 'Create account' : 'Sign in';
+      $('login-sub').textContent = on ? 'Use your invite code to create a user account.' : 'Sign in or create an invited user account.';
+    }
+
+    document.querySelectorAll('[data-panel]').forEach((el) => el.addEventListener('click', () => showPanel(el.dataset.panel)));
+    $('signup-mode-btn').onclick = () => setSignupMode(!signupMode);
+
+    function selectProvider(p) {
+      $('p-id').value = p.id;
+      $('p-name').value = p.name;
+      $('p-models').value = JSON.stringify(p.defaultPrefixes || []);
+      $('provider-search').value = p.name + ' (' + p.id + ')';
+      $('provider-dropdown').classList.remove('open');
+    }
+
+    function renderProviderDropdown(filter) {
+      const q = (filter || '').toLowerCase();
+      const list = catalog.filter((p) => !q || p.id.includes(q) || p.name.toLowerCase().includes(q)).slice(0, 40);
+      const dd = $('provider-dropdown');
+      dd.innerHTML = list.map((p) =>
+        `<div class="provider-opt" data-id="${p.id}">
+          <strong>${p.name}</strong>
+          <span>${p.id}</span>
+          ${p.supportsLiveModels ? '<span class="badge badge-live">Live models</span>' : '<span class="badge badge-manual">Manual prefixes</span>'}
+        </div>`
+      ).join('') || '<div class="provider-opt muted">No match</div>';
+      dd.querySelectorAll('.provider-opt[data-id]').forEach((el) => {
+        el.onclick = () => selectProvider(catalog.find((x) => x.id === el.dataset.id));
+      });
+    }
+
+    async function loadCatalog() {
+      if (currentUser?.role !== 'admin') return;
+      const { presets } = await api('/provider-presets');
+      catalog = presets || [];
+      $('catalog-count').textContent = '(' + catalog.length + ' in gateway)';
+      renderProviderDropdown('');
+    }
+
+    $('provider-search').addEventListener('focus', () => {
+      $('provider-dropdown').classList.add('open');
+      renderProviderDropdown($('provider-search').value);
+    });
+    $('provider-search').addEventListener('input', () => renderProviderDropdown($('provider-search').value));
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.provider-pick')) $('provider-dropdown').classList.remove('open');
+    });
+
+    $('fetch-models-btn').onclick = async () => {
+      const id = $('p-id').value.trim();
+      const key = $('p-key').value.trim();
+      if (!id || !key) {
+        $('fetch-status').textContent = 'Enter provider ID and API key first.';
+        $('fetch-status').classList.remove('hidden');
+        return;
+      }
+      $('fetch-status').textContent = 'Fetching from provider API…';
+      $('fetch-status').classList.remove('hidden');
+      $('model-preview').classList.add('hidden');
+      try {
+        const data = await api('/providers/fetch-models', { method: 'POST', body: JSON.stringify({ provider_id: id, api_key: key }) });
+        if (data.suggested_prefixes?.length) $('p-models').value = JSON.stringify(data.suggested_prefixes);
+        const n = (data.models || []).length;
+        $('fetch-status').textContent = data.error ? data.error : `Loaded ${n} models — prefixes updated.`;
+        $('fetch-status').className = data.error ? 'err' : 'ok-msg';
+        if (n) {
+          $('model-preview').textContent = data.models.map((m) => m.id).join('\n');
+          $('model-preview').classList.remove('hidden');
+        }
+      } catch (e) {
+        $('fetch-status').textContent = e.message;
+        $('fetch-status').className = 'err';
+      }
+    };
+
+    async function refreshProviders() {
+      if (currentUser?.role !== 'admin') return;
+      const { providers } = await api('/providers');
+      const tb = $('providers-tbody');
+      if (!providers.length) {
+        tb.innerHTML = '<tr><td colspan="4" class="muted">No providers yet.</td></tr>';
+        return;
+      }
+      tb.innerHTML = providers.map((p) =>
+        `<tr>
+          <td><strong>${p.name}</strong><br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${p.id}</span></td>
+          <td style="font-size:0.75rem;color:var(--ink-2)">${(p.models || []).join(', ') || '—'}</td>
+          <td><button type="button" class="linkish" data-sync="${p.id}">Sync models</button></td>
+          <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-del="${p.id}">Remove</button></td>
+        </tr>`
+      ).join('');
+      tb.querySelectorAll('[data-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Remove ' + btn.dataset.del + '?')) return;
+          await api('/providers/' + btn.dataset.del, { method: 'DELETE' });
+          await refreshProviders();
+        };
+      });
+      tb.querySelectorAll('[data-sync]').forEach((btn) => {
+        btn.onclick = async () => {
+          btn.textContent = '…';
+          try {
+            const r = await api('/providers/' + btn.dataset.sync + '/sync-models', { method: 'POST' });
+            btn.textContent = r.model_count + ' models';
+            await refreshProviders();
+          } catch (e) {
+            btn.textContent = 'Failed';
+            alert(e.message);
+          }
+        };
+      });
+    }
+
+    async function refreshKeys() {
+      const { api_keys } = await api('/api-keys');
+      const active = api_keys.filter((k) => k.is_active);
+      const tb = $('keys-tbody');
+      if (!active.length) {
+        tb.innerHTML = '<tr><td colspan="5" class="muted">No keys.</td></tr>';
+        return;
+      }
+      tb.innerHTML = active.map((k) =>
+        `<tr><td style="font-family:var(--mono)">${k.key_prefix}…</td><td>${k.label || '—'}${k.user_email && currentUser?.role === 'admin' ? '<br><span class="muted">' + k.user_email + '</span>' : ''}</td><td>${k.rpm_limit ?? '—'}</td><td>${k.monthly_token_limit ?? '—'}</td>
+        <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-rev="${k.id}">Revoke</button></td></tr>`
+      ).join('');
+      tb.querySelectorAll('[data-rev]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Revoke?')) return;
+          await api('/api-keys/' + btn.dataset.rev, { method: 'DELETE' });
+          await refreshKeys();
+        };
+      });
+    }
+
+    function fmt(n) {
+      const x = Number(n) || 0;
+      if (x >= 1e6) return (x / 1e6).toFixed(1) + 'M';
+      if (x >= 1e3) return (x / 1e3).toFixed(1) + 'k';
+      return String(x);
+    }
+
+    async function refreshUsage() {
+      const data = await api('/usage?days=' + ($('usage-days').value || 30));
+      const s = data.summary || {};
+      const tok = (Number(s.prompt_tokens) || 0) + (Number(s.completion_tokens) || 0);
+      $('usage-stats').innerHTML = `
+        <div class="stat"><b>${fmt(s.requests)}</b><small>Requests</small></div>
+        <div class="stat"><b>${fmt(tok)}</b><small>Tokens</small></div>
+        <div class="stat"><b>${fmt(s.prompt_tokens)}</b><small>Input</small></div>
+        <div class="stat"><b>${fmt(s.completion_tokens)}</b><small>Output</small></div>`;
+      const days = data.by_day || [];
+      const max = Math.max(1, ...days.map((d) => Number(d.requests) || 0));
+      $('usage-chart').innerHTML = days.map((d) => `<div class="bar" style="height:${Math.round(((Number(d.requests) || 0) / max) * 100)}%" title="${d.day}"></div>`).join('') || '<span class="muted">No data</span>';
+      $('usage-by-provider').innerHTML = (data.by_provider || []).map((r) => `<tr><td>${r.provider}</td><td class="num">${fmt(r.requests)}</td><td class="num">${fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0))}</td></tr>`).join('');
+      $('usage-by-key').innerHTML = (data.by_api_key || []).map((r) => `<tr><td>${r.label || r.key_prefix + '…'}${r.user_email ? '<br><span class="muted">' + r.user_email + '</span>' : ''}</td><td class="num">${fmt(r.requests)}</td><td class="num">${fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0))}</td></tr>`).join('');
+      $('usage-by-model').innerHTML = (data.by_model || []).map((r) => `<tr><td style="font-family:var(--mono);font-size:0.7rem">${r.model}</td><td>${r.provider}</td><td class="num">${fmt(r.requests)}</td></tr>`).join('');
+    }
+
+    async function refreshUsers() {
+      if (currentUser?.role !== 'admin') return;
+      const [{ users }, { invites }] = await Promise.all([api('/users'), api('/invites')]);
+      $('users-tbody').innerHTML = (users || []).map((u) => `<tr><td>${u.email}</td><td>${u.role}</td><td>${u.is_active ? 'yes' : 'no'}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No users.</td></tr>';
+      $('invites-tbody').innerHTML = (invites || []).map((i) => `<tr><td>${i.label || '—'}</td><td>${i.used_count}/${i.max_uses}</td><td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-invite-del="${i.id}">Disable</button></td></tr>`).join('') || '<tr><td colspan="3" class="muted">No invites.</td></tr>';
+      $('invites-tbody').querySelectorAll('[data-invite-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          await api('/invites/' + btn.dataset.inviteDel, { method: 'DELETE' });
+          await refreshUsers();
+        };
+      });
+    }
+
+    async function enterApp(session) {
+      currentUser = session || await api('/session');
+      $('login-screen').classList.add('hidden');
+      $('app').classList.remove('hidden');
+      applyRoleUI();
+      await loadCatalog();
+      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshUsers()]);
+    }
+
+    $('login-btn').onclick = async () => {
+      $('login-err').classList.add('hidden');
+      try {
+        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+        await enterApp(session);
+      } catch (e) {
+        $('login-err').textContent = e.message;
+        $('login-err').classList.remove('hidden');
+      }
+    };
+
+    $('signup-btn').onclick = async () => {
+      $('login-err').classList.add('hidden');
+      try {
+        await api('/signup', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value, invite_code: $('invite-code').value }) });
+        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+        await enterApp(session);
+      } catch (e) {
+        $('login-err').textContent = e.message;
+        $('login-err').classList.remove('hidden');
+      }
+    };
+
+    $('setup-btn').onclick = async () => {
+      $('login-err').classList.add('hidden');
+      try {
+        await api('/setup', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
+        await enterApp(session);
+      } catch (e) {
+        $('login-err').textContent = e.message;
+        $('login-err').classList.remove('hidden');
+      }
+    };
+
+    async function logout() {
+      await api('/logout', { method: 'POST' });
+      currentUser = null;
+      $('app').classList.add('hidden');
+      $('login-screen').classList.remove('hidden');
+      setSignupMode(false);
+    }
+    $('logout-btn').onclick = logout;
+    $('logout-mobile-btn').onclick = logout;
+
+    $('save-provider').onclick = async () => {
+      let models = [];
+      try {
+        const raw = $('p-models').value.trim();
+        if (raw) models = JSON.parse(raw);
+      } catch { alert('Invalid JSON for prefixes'); return; }
+      await api('/providers', { method: 'POST', body: JSON.stringify({ id: $('p-id').value, name: $('p-name').value, api_key: $('p-key').value, models }) });
+      $('p-key').value = '';
+      await refreshProviders();
+    };
+
+    $('create-key').onclick = async () => {
+      const btn = $('create-key');
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Creating…';
+      try {
+        const data = await api('/api-keys', {
+          method: 'POST',
+          body: JSON.stringify({
+            label: $('k-label').value,
+            rpm_limit: $('k-rpm').value ? parseInt($('k-rpm').value, 10) : null,
+            monthly_token_limit: $('k-tokens').value ? parseInt($('k-tokens').value, 10) : null,
+          }),
+        });
+        $('new-key-box').classList.remove('hidden');
+        $('new-key-text').textContent = data.api_key;
+        await refreshKeys();
+      } catch (e) {
+        alert(e.message || 'Failed to create API key');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    };
+
+    $('copy-key-btn').onclick = () => navigator.clipboard?.writeText($('new-key-text').textContent);
+    $('copy-invite-btn').onclick = () => navigator.clipboard?.writeText($('new-invite-text').textContent);
+    $('create-invite').onclick = async () => {
+      try {
+        const data = await api('/invites', { method: 'POST', body: JSON.stringify({ label: $('invite-label').value, max_uses: $('invite-max').value ? parseInt($('invite-max').value, 10) : 1 }) });
+        $('new-invite-box').classList.remove('hidden');
+        $('new-invite-text').textContent = data.invite_code;
+        await refreshUsers();
+      } catch (e) {
+        alert(e.message || 'Failed to create invite');
+      }
+    };
+    $('usage-days').onchange = refreshUsage;
+    $('refresh-usage').onclick = refreshUsage;
+
+    (async () => {
+      const st = await fetch('/admin/setup/status', { credentials: 'include' }).then((r) => r.json()).catch(() => ({}));
+      if (st.needs_setup) {
+        $('setup-block').classList.remove('hidden');
+        $('setup-btn').classList.remove('hidden');
+        $('signup-mode-btn').classList.add('hidden');
+        $('login-title').textContent = 'Setup';
+      }
+      try {
+        const session = await api('/session');
+        await enterApp(session);
+      } catch { /* show login */ }
+    })();
+  </script>
+</body>
+</html>
