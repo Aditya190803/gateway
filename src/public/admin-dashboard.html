@@ -56,7 +56,27 @@
       letter-spacing: -0.03em;
       margin-bottom: 0.25rem;
     }
-    .sidebar .tag { font-size: 0.75rem; color: var(--ink-3); margin-bottom: 2rem; }
+    .sidebar .tag { font-size: 0.75rem; color: var(--ink-3); margin-bottom: 1rem; }
+    .user-pill {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0.35rem 0.75rem;
+      margin-bottom: 1.25rem;
+      font-size: 0.75rem;
+    }
+    .user-email { font-weight: 600; color: var(--ink); }
+    .user-role {
+      margin-left: 0.5rem;
+      padding: 0.1rem 0.45rem;
+      border-radius: 999px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
     .nav-btn {
       display: block;
       width: 100%;
@@ -359,6 +379,10 @@
     <aside class="sidebar">
       <div class="logo">Gateway</div>
       <div class="tag">Managed proxy</div>
+      <div class="user-pill">
+        <span id="current-user-email" class="user-email"></span>
+        <span id="current-user-role" class="user-role"></span>
+      </div>
       <button type="button" class="nav-btn active admin-only" data-panel="providers">Providers</button>
       <button type="button" class="nav-btn" data-panel="keys">API keys</button>
       <button type="button" class="nav-btn" data-panel="usage">Usage</button>
@@ -381,8 +405,8 @@
       </div>
 
       <section id="panel-providers" class="panel active">
-        <h2 class="page-title">Providers</h2>
-        <p class="section-lead">Connect LLM backends. Fetch live models from provider APIs (OpenAI <code style="font-size:0.8em">GET /v1/models</code>, Anthropic, Google, OpenRouter, etc.).</p>
+        <h2 class="page-title">Providers &amp; API Keys</h2>
+        <p class="section-lead">Add or update backend provider API keys. Search the catalog, fetch latest models, and configure routing prefixes.</p>
         <div class="card">
           <label>Search gateway providers <span id="catalog-count" class="muted"></span></label>
           <div class="provider-pick">
@@ -462,8 +486,18 @@
           <button type="button" class="btn btn-primary" id="create-invite" style="margin-top:1rem">Create invite</button>
           <div id="new-invite-box" class="key-box hidden">
             <span class="ok-msg">Copy now — shown once</span>
-            <code id="new-invite-text"></code>
-            <button type="button" class="btn btn-secondary" id="copy-invite-btn">Copy</button>
+
+            <div style="margin:0.5rem 0 0.25rem">
+              <div class="muted" style="font-size:0.75rem">Invite code</div>
+              <code id="new-invite-text"></code>
+              <button type="button" class="btn btn-secondary" id="copy-invite-btn">Copy code</button>
+            </div>
+
+            <div>
+              <div class="muted" style="font-size:0.75rem">Invite link (share this)</div>
+              <code id="new-invite-url" style="word-break:break-all"></code>
+              <button type="button" class="btn btn-secondary" id="copy-invite-url-btn">Copy link</button>
+            </div>
           </div>
         </div>
         <div class="grid-2">
@@ -541,6 +575,10 @@
       if (!isAdmin) {
         $('k-rpm').placeholder = 'Set by admin';
         $('k-tokens').placeholder = 'Set by admin';
+      }
+      if (currentUser) {
+        $('current-user-email').textContent = currentUser.email;
+        $('current-user-role').textContent = currentUser.role;
       }
       showPanel(isAdmin ? 'providers' : 'keys');
     }
@@ -814,11 +852,17 @@
 
     $('copy-key-btn').onclick = () => navigator.clipboard?.writeText($('new-key-text').textContent);
     $('copy-invite-btn').onclick = () => navigator.clipboard?.writeText($('new-invite-text').textContent);
+    $('copy-invite-url-btn').onclick = () => navigator.clipboard?.writeText($('new-invite-url').textContent);
+
     $('create-invite').onclick = async () => {
       try {
         const data = await api('/invites', { method: 'POST', body: JSON.stringify({ label: $('invite-label').value, max_uses: $('invite-max').value ? parseInt($('invite-max').value, 10) : 1 }) });
+        const origin = window.location.origin;
+        const inviteUrl = `${origin}/admin/dashboard?invite=${encodeURIComponent(data.invite_code)}`;
+
         $('new-invite-box').classList.remove('hidden');
         $('new-invite-text').textContent = data.invite_code;
+        $('new-invite-url').textContent = inviteUrl;
         await refreshUsers();
       } catch (e) {
         alert(e.message || 'Failed to create invite');
@@ -828,6 +872,15 @@
     $('refresh-usage').onclick = refreshUsage;
 
     (async () => {
+      // Pre-fill invite from URL if present (?invite=inv-...)
+      const inviteParam = new URLSearchParams(location.search).get('invite');
+      if (inviteParam) {
+        setSignupMode(true);
+        $('invite-code').value = inviteParam;
+        // Clean the URL
+        history.replaceState(null, '', location.pathname);
+      }
+
       const st = await fetch('/admin/setup/status', { credentials: 'include' }).then((r) => r.json()).catch(() => ({}));
       if (st.needs_setup) {
         $('setup-block').classList.remove('hidden');
