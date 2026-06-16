@@ -1,0 +1,3 @@
+# Copy to .dev.vars for local wrangler dev (never commit .dev.vars)
+PROVIDER_KEY_ENCRYPTION_KEY=change-me-min-16-chars-local-dev-only
+ADMIN_JWT_SECRET=change-me-jwt-secret-min-16-chars-local
