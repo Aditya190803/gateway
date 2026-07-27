@@ -3,7 +3,7 @@ import { hashApiKey } from '../../managed/apiKeys';
 import {
   aggregateModelsFromProviders,
   applyProviderHeaders,
-  decryptActiveProviderKey,
+  resolveProviderCredential,
 } from '../../managed/injectProvider';
 import {
   matchProviderWithDefaults,
@@ -158,9 +158,15 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     );
   }
 
+  // Owner-only providers (subscription seats) are visible only to keys owned by
+  // the account that connected them, so routing never picks one for someone else.
   const providerRows = await env.DB.prepare(
-    `SELECT id, models FROM providers WHERE is_active = 1`
-  ).all<{ id: string; models: string }>();
+    `SELECT id, models FROM providers
+      WHERE is_active = 1
+        AND (owner_only = 0 OR owner_user_id = ?)`
+  )
+    .bind(keyRow.user_id)
+    .all<{ id: string; models: string }>();
 
   const providerModels = (providerRows.results ?? []).map((r) => ({
     id: r.id,
@@ -200,12 +206,19 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     );
   }
 
-  const providerApiKey = await decryptActiveProviderKey(env, providerId);
-  if (!providerApiKey) {
+  const credential = await resolveProviderCredential(env, providerId);
+  if (!credential.ok) {
+    const err = credential.error;
+    // An expired or revoked subscription login is the operator's problem to fix,
+    // so name the provider that needs reconnecting rather than a bare 503.
+    const message =
+      err.kind === 'oauth'
+        ? `Provider ${providerId}: ${err.message}`
+        : 'Provider not available or decryption failed';
     return c.json(
       {
         error: {
-          message: 'Provider not available or decryption failed',
+          message,
           type: 'server_error',
         },
       },
@@ -218,7 +231,7 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   c.req.raw = applyProviderHeaders(
     c.req.raw,
     providerId,
-    providerApiKey,
+    credential.value,
     c.req.raw.body
   );
 

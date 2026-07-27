@@ -22,4 +22,13 @@ export type ProviderRecord = {
   api_key: string;
   models: string;
   is_active: number;
+  /** 'api_key' (default) or 'oauth'. See migrations/0004_provider_oauth.sql. */
+  auth_type?: string;
+  oauth_vendor?: string | null;
+  oauth_credentials?: string | null;
+  oauth_expires_at?: number | null;
+  oauth_account_label?: string | null;
+  oauth_version?: number;
+  owner_only?: number;
+  owner_user_id?: number | null;
 };

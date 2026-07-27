@@ -24,6 +24,7 @@ import {
 } from './fetchModels';
 import { parseModelsJson } from './modelRouting';
 import { generateInviteCode, hashInviteCode, invitePrefix } from './invites';
+import { createOAuthRoutes } from './oauthRoutes';
 import type { ManagedEnv } from './types';
 
 type AuthUser = { userId: number; email: string; role: 'admin' | 'user' };
@@ -85,6 +86,9 @@ function userFilter(auth: AuthUser): { sql: string; binds: unknown[] } {
 
 export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
   const admin = new Hono<{ Bindings: ManagedEnv }>();
+
+  // Subscription-account (OAuth) providers. Guarded by the same admin session.
+  admin.route('/oauth', createOAuthRoutes(requirePlatformAdmin));
 
   admin.post('/login', async (c) => {
     const env = c.env;

@@ -1,0 +1,22 @@
+import type { OAuthAdapter } from './types';
+
+/**
+ * Registered OAuth adapters, keyed by adapter id (providers.oauth_vendor).
+ *
+ * Adapters are registered rather than hard-referenced so a vendor whose flow
+ * breaks can be dropped without touching the request path.
+ */
+const adapters = new Map<string, OAuthAdapter>();
+
+export function registerAdapter(adapter: OAuthAdapter): void {
+  adapters.set(adapter.id, adapter);
+}
+
+export function getAdapter(id: string | null | undefined): OAuthAdapter | null {
+  if (!id) return null;
+  return adapters.get(id) ?? null;
+}
+
+export function listAdapters(): OAuthAdapter[] {
+  return Array.from(adapters.values());
+}
