@@ -99,6 +99,9 @@ npm run db:migrate:local   # or db:migrate for remote
 exactly as it encrypts API keys.
 
 All admin endpoints below require an admin session cookie and the `admin` role.
+The same operations are available in the dashboard at
+`/admin/dashboard` → **Subscriptions** tab, which is the easier path; the curl
+examples are for scripting.
 
 ### Connect ChatGPT (Codex)
 
@@ -165,9 +168,32 @@ curl https://<gateway>/admin/oauth/providers  -b cookie.txt
 curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/refresh -b cookie.txt
 ```
 
-`/providers` reports the connected account, expiry, and whether it has lapsed.
-It never returns the tokens themselves. `/refresh` forces a round trip so you
-can verify a connection without sending real traffic.
+`/providers` reports the connected account, the routing model list, expiry, and
+whether it has lapsed. It never returns the tokens themselves. `/refresh`
+forces a round trip so you can verify a connection without sending real
+traffic.
+
+### Change which models route to a subscription
+
+Subscription endpoints expose no `/models` API, so the model list on the
+provider row is authoritative and is edited directly:
+
+```bash
+curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/models \
+  -H 'content-type: application/json' -b cookie.txt \
+  -d '{"models":["gpt-5-codex","gpt-5"]}'
+```
+
+An empty list routes nothing to the account. In the dashboard this is
+**Subscriptions → Edit models**.
+
+### Disconnect
+
+Deleting the provider row deletes the stored credentials:
+
+```bash
+curl -X DELETE https://<gateway>/admin/providers/chatgpt-sub -b cookie.txt
+```
 
 ---
 

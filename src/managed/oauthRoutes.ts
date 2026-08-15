@@ -1,5 +1,6 @@
 import { Context, Hono } from 'hono';
 import { encryptProviderKey } from './encryption';
+import { parseModelsJson } from './modelRouting';
 import { getAdapter, listAdapters } from './oauth';
 import { createPkcePair, generateState } from './oauth/pkce';
 import {
@@ -59,7 +60,8 @@ async function storeConnectedAccount(
     null;
 
   // api_key is NOT NULL on the base schema; OAuth rows keep '' there and carry
-  // their credentials in oauth_credentials instead.
+  // their credentials in oauth_credentials instead. The conflict update also
+  // blanks api_key so converting a key-based row drops the now-unused secret.
   await env.DB.prepare(
     `INSERT INTO providers
        (id, name, api_key, models, is_active, auth_type, oauth_vendor,
@@ -68,6 +70,7 @@ async function storeConnectedAccount(
      VALUES (?, ?, '', ?, 1, 'oauth', ?, ?, ?, ?, 1, ?)
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
+       api_key = '',
        models = excluded.models,
        is_active = 1,
        auth_type = 'oauth',
@@ -360,12 +363,13 @@ export function createOAuthRoutes(
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
     const rows = await c.env.DB.prepare(
-      `SELECT id, name, oauth_vendor, oauth_expires_at, oauth_account_label,
+      `SELECT id, name, models, oauth_vendor, oauth_expires_at, oauth_account_label,
               owner_only, owner_user_id, is_active
          FROM providers WHERE auth_type = 'oauth' ORDER BY id`,
     ).all<{
       id: string;
       name: string;
+      models: string;
       oauth_vendor: string | null;
       oauth_expires_at: number | null;
       oauth_account_label: string | null;
@@ -378,12 +382,53 @@ export function createOAuthRoutes(
       providers: (rows.results ?? []).map((r) => ({
         id: r.id,
         name: r.name,
+        models: parseModelsJson(r.models),
         is_active: r.is_active,
         owner_only: r.owner_only,
         owner_user_id: r.owner_user_id,
         ...describeStatus(r),
       })),
     });
+  });
+
+  /**
+   * Replace the routing model list. Subscription endpoints expose no /models
+   * API, so this list is the only routing source and needs a manual editor.
+   */
+  app.post('/:id/models', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+
+    const id = c.req.param('id');
+    let body: { models?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ status: 'failure', message: 'Invalid JSON' }, 400);
+    }
+    if (
+      !Array.isArray(body.models) ||
+      !body.models.every((m) => typeof m === 'string' && m.trim())
+    ) {
+      return c.json(
+        { status: 'failure', message: 'models must be an array of non-empty strings' },
+        400,
+      );
+    }
+
+    const row = await getOAuthProviderRow(c.env, id);
+    if (!row || row.auth_type !== 'oauth') {
+      return c.json(
+        { status: 'failure', message: 'Not an OAuth provider' },
+        404,
+      );
+    }
+
+    const models = (body.models as string[]).map((m) => m.trim());
+    await c.env.DB.prepare(`UPDATE providers SET models = ? WHERE id = ?`)
+      .bind(JSON.stringify(models), id)
+      .run();
+    return c.json({ status: 'success', models });
   });
 
   /** Force a refresh, so the operator can verify a connection without traffic. */

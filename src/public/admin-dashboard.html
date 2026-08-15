@@ -384,6 +384,7 @@
         <span id="current-user-role" class="user-role"></span>
       </div>
       <button type="button" class="nav-btn active admin-only" data-panel="providers">Providers</button>
+      <button type="button" class="nav-btn admin-only" data-panel="subscriptions">Subscriptions</button>
       <button type="button" class="nav-btn" data-panel="keys">API keys</button>
       <button type="button" class="nav-btn" data-panel="usage">Usage</button>
       <button type="button" class="nav-btn admin-only" data-panel="users">Users</button>
@@ -398,6 +399,7 @@
         <button type="button" class="btn btn-secondary" id="logout-mobile-btn">Sign out</button>
         <div class="tabs">
           <button type="button" class="active admin-only" data-panel="providers">Providers</button>
+          <button type="button" class="admin-only" data-panel="subscriptions">Subscriptions</button>
           <button type="button" data-panel="keys">Keys</button>
           <button type="button" data-panel="usage">Usage</button>
           <button type="button" class="admin-only" data-panel="users">Users</button>
@@ -445,6 +447,58 @@
           <table>
             <thead><tr><th>Provider</th><th>Prefixes</th><th>Models</th><th></th></tr></thead>
             <tbody id="providers-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="panel-subscriptions" class="panel admin-only">
+        <h2 class="page-title">Subscription accounts</h2>
+        <p class="section-lead">Serve requests from a Claude Pro/Max or ChatGPT Plus/Pro seat instead of a metered API key. Subscription providers are owner-only: only your own <code style="font-size:0.85em">sk-</code> keys can route to them.</p>
+        <div class="card">
+          <h2 class="page-title" style="font-size:1.1rem">Connect an account</h2>
+          <label for="o-vendor">Vendor</label>
+          <select id="o-vendor"></select>
+          <p class="muted" id="o-vendor-note" style="margin:-0.5rem 0 1rem;font-size:0.8125rem"></p>
+          <div class="grid-2">
+            <div>
+              <label for="o-id">Provider ID</label>
+              <input id="o-id" placeholder="chatgpt-sub" autocomplete="off" />
+            </div>
+            <div>
+              <label for="o-name">Display name</label>
+              <input id="o-name" placeholder="ChatGPT Pro seat" autocomplete="off" />
+            </div>
+          </div>
+          <label for="o-models">Models to route (JSON)</label>
+          <input id="o-models" placeholder='["gpt-5-codex"]' autocomplete="off" />
+          <div id="o-import-block">
+            <label for="o-creds">Credentials JSON <span class="muted" id="o-cred-hint" style="font-weight:400"></span></label>
+            <textarea id="o-creds" rows="4" style="font-family:var(--mono);font-size:0.75rem" placeholder='Paste the credential file contents here'></textarea>
+            <div class="btn-row">
+              <button type="button" class="btn btn-primary" id="o-import-btn">Import credentials</button>
+            </div>
+          </div>
+          <div id="o-authz-block" class="hidden">
+            <div class="btn-row" style="margin-bottom:0.75rem">
+              <button type="button" class="btn btn-blue" id="o-start-btn">Start browser authorization</button>
+            </div>
+            <div id="o-authz-step2" class="hidden">
+              <p class="ok-msg" style="margin:0 0 0.35rem">1. Open the authorization page and approve:</p>
+              <p style="margin:0 0 1rem"><a id="o-authz-url" href="#" target="_blank" rel="noopener" style="font-size:0.8rem;word-break:break-all;color:var(--blue)"></a></p>
+              <label for="o-code">2. Paste the code the vendor shows you</label>
+              <input id="o-code" placeholder="code#state" autocomplete="off" />
+              <div class="btn-row">
+                <button type="button" class="btn btn-primary" id="o-complete-btn">Complete connection</button>
+              </div>
+            </div>
+          </div>
+          <p id="o-status" class="muted hidden" style="margin-top:0.75rem;margin-bottom:0"></p>
+        </div>
+        <div class="card">
+          <h2 class="page-title" style="font-size:1.1rem">Connected</h2>
+          <table>
+            <thead><tr><th>Account</th><th>Token expires</th><th>Models</th><th></th></tr></thead>
+            <tbody id="oauth-tbody"></tbody>
           </table>
         </div>
       </section>
@@ -561,7 +615,7 @@
     }
 
     function showPanel(name) {
-      if ((name === 'providers' || name === 'users') && currentUser?.role !== 'admin') name = 'keys';
+      if ((name === 'providers' || name === 'users' || name === 'subscriptions') && currentUser?.role !== 'admin') name = 'keys';
       document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
       document.querySelectorAll('[data-panel]').forEach((b) => b.classList.toggle('active', b.dataset.panel === name));
       $('panel-' + name)?.classList.add('active');
@@ -674,9 +728,9 @@
       }
       tb.innerHTML = providers.map((p) =>
         `<tr>
-          <td><strong>${p.name}</strong><br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${p.id}</span></td>
+          <td><strong>${p.name}</strong>${p.auth_type === 'oauth' ? '<span class="badge badge-live">Subscription</span>' : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${p.id}</span></td>
           <td style="font-size:0.75rem;color:var(--ink-2)">${(p.models || []).join(', ') || '—'}</td>
-          <td><button type="button" class="linkish" data-sync="${p.id}">Sync models</button></td>
+          <td>${p.auth_type === 'oauth' ? '<span class="muted" style="font-size:0.75rem">Managed in Subscriptions</span>' : `<button type="button" class="linkish" data-sync="${p.id}">Sync models</button>`}</td>
           <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-del="${p.id}">Remove</button></td>
         </tr>`
       ).join('');
@@ -719,6 +773,173 @@
           if (!confirm('Revoke?')) return;
           await api('/api-keys/' + btn.dataset.rev, { method: 'DELETE' });
           await refreshKeys();
+        };
+      });
+    }
+
+    /* ---- Subscriptions (OAuth) ---- */
+    let oauthVendors = [];
+    let oauthState = null;
+
+    function parseJsonField(value, label) {
+      const raw = value.trim();
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error(label + ' must be a JSON array');
+      return parsed;
+    }
+
+    function oauthInputs() {
+      const providerId = $('o-id').value.trim().toLowerCase();
+      if (!providerId) throw new Error('Provider ID is required');
+      return {
+        vendor: $('o-vendor').value,
+        provider_id: providerId,
+        provider_name: $('o-name').value.trim(),
+        models: parseJsonField($('o-models').value, 'Models'),
+      };
+    }
+
+    function oauthStatus(msg, isErr) {
+      const el = $('o-status');
+      el.textContent = msg;
+      el.className = isErr ? 'err' : 'ok-msg';
+    }
+
+    function onOAuthVendorChange() {
+      const v = oauthVendors.find((x) => x.id === $('o-vendor').value);
+      if (!v) return;
+      if (!$('o-id').value) $('o-id').value = v.id === 'openai-codex' ? 'chatgpt-sub' : 'claude-sub';
+      if (!$('o-name').value) $('o-name').value = v.label;
+      $('o-models').value = JSON.stringify(v.default_models || []);
+      // Import is offered when the vendor's CLI writes a credential file we can parse.
+      $('o-import-block').classList.toggle('hidden', !v.credential_file);
+      $('o-cred-hint').textContent = v.credential_file ? '— usually at ' + v.credential_file : '';
+      // Browser authorization only works when the vendor hands back a paste-able code.
+      $('o-authz-block').classList.toggle('hidden', !v.supports_manual_code);
+      $('o-authz-step2').classList.add('hidden');
+      oauthState = null;
+      $('o-vendor-note').textContent = v.supports_manual_code
+        ? 'Authorize in the browser, then paste the code the vendor shows you.'
+        : 'This vendor only allows a localhost callback, so the gateway cannot receive it. Log in with the vendor CLI, then import the credential file.';
+    }
+    $('o-vendor').onchange = onOAuthVendorChange;
+
+    async function loadOAuthVendors() {
+      if (currentUser?.role !== 'admin') return;
+      const { vendors } = await api('/oauth/vendors');
+      oauthVendors = vendors || [];
+      $('o-vendor').innerHTML = oauthVendors.map((v) => `<option value="${v.id}">${v.label}</option>`).join('');
+      onOAuthVendorChange();
+    }
+
+    $('o-start-btn').onclick = async () => {
+      let payload;
+      try {
+        const base = oauthInputs();
+        payload = { vendor: base.vendor, provider_id: base.provider_id, provider_name: base.provider_name };
+      } catch (e) { oauthStatus(e.message, true); return; }
+      try {
+        const data = await api('/oauth/start', { method: 'POST', body: JSON.stringify(payload) });
+        oauthState = data.state;
+        const link = $('o-authz-url');
+        link.href = data.authorize_url;
+        link.textContent = data.authorize_url;
+        $('o-authz-step2').classList.remove('hidden');
+        oauthStatus('Authorization started. The code expires in 10 minutes.', false);
+      } catch (e) { oauthStatus(e.message, true); }
+    };
+
+    $('o-complete-btn').onclick = async () => {
+      if (!oauthState) { oauthStatus('Start authorization first.', true); return; }
+      const code = $('o-code').value.trim();
+      if (!code) { oauthStatus('Paste the code first.', true); return; }
+      try {
+        const base = oauthInputs();
+        await api('/oauth/complete', { method: 'POST', body: JSON.stringify({ state: oauthState, code, models: base.models.length ? base.models : undefined }) });
+        oauthState = null;
+        $('o-code').value = '';
+        $('o-authz-step2').classList.add('hidden');
+        oauthStatus('Account connected.', false);
+        await Promise.all([refreshOAuth(), refreshProviders()]);
+      } catch (e) { oauthStatus(e.message, true); }
+    };
+
+    $('o-import-btn').onclick = async () => {
+      let payload;
+      try {
+        payload = oauthInputs();
+        const raw = $('o-creds').value.trim();
+        if (!raw) throw new Error('Paste the credential file contents first');
+        payload.credentials = JSON.parse(raw);
+        if (!payload.models.length) delete payload.models;
+      } catch (e) { oauthStatus(e.message, true); return; }
+      try {
+        await api('/oauth/import', { method: 'POST', body: JSON.stringify(payload) });
+        $('o-creds').value = '';
+        oauthStatus('Account connected. The imported token is refreshed on first use.', false);
+        await Promise.all([refreshOAuth(), refreshProviders()]);
+      } catch (e) { oauthStatus(e.message, true); }
+    };
+
+    async function refreshOAuth() {
+      if (currentUser?.role !== 'admin') return;
+      const { providers } = await api('/oauth/providers');
+      const tb = $('oauth-tbody');
+      if (!providers.length) {
+        tb.innerHTML = '<tr><td colspan="4" class="muted">No subscription accounts connected.</td></tr>';
+        return;
+      }
+      tb.innerHTML = providers.map((p) => {
+        const vendor = oauthVendors.find((v) => v.id === p.vendor);
+        const expiry = p.expires_at
+          ? new Date(p.expires_at).toLocaleString()
+          : 'unknown';
+        const badge = p.expired
+          ? '<span class="badge" style="background:var(--danger-bg);color:var(--danger)">Needs refresh</span>'
+          : '<span class="badge badge-live">Fresh</span>';
+        return `<tr>
+          <td><strong>${p.name}</strong>${p.account ? ' · ' + p.account : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${p.id} · ${vendor ? vendor.label : p.vendor}</span></td>
+          <td style="font-size:0.75rem">${expiry} ${badge}</td>
+          <td style="font-size:0.75rem;color:var(--ink-2)">${(p.models || []).join(', ') || '—'}<br><button type="button" class="linkish" data-o-models="${p.id}">Edit models</button></td>
+          <td style="white-space:nowrap">
+            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-refresh="${p.id}">Refresh</button>
+            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-del="${p.id}">Disconnect</button>
+          </td>
+        </tr>`;
+      }).join('');
+      tb.querySelectorAll('[data-o-refresh]').forEach((btn) => {
+        btn.onclick = async () => {
+          btn.textContent = '…';
+          try {
+            await api('/oauth/' + btn.dataset.oRefresh + '/refresh', { method: 'POST' });
+          } catch (e) {
+            alert(e.message);
+          }
+          await refreshOAuth();
+        };
+      });
+      tb.querySelectorAll('[data-o-models]').forEach((btn) => {
+        btn.onclick = async () => {
+          const p = providers.find((x) => x.id === btn.dataset.oModels);
+          const current = JSON.stringify(p?.models || []);
+          const next = prompt('Models routed to this account (JSON array):', current);
+          if (next === null) return;
+          let models;
+          try {
+            models = parseJsonField(next, 'Models');
+          } catch (e) { alert(e.message); return; }
+          try {
+            await api('/oauth/' + btn.dataset.oModels + '/models', { method: 'POST', body: JSON.stringify({ models }) });
+            await Promise.all([refreshOAuth(), refreshProviders()]);
+          } catch (e) { alert(e.message); }
+        };
+      });
+      tb.querySelectorAll('[data-o-del]').forEach((btn) => {
+        btn.onclick = async () => {
+          if (!confirm('Disconnect ' + btn.dataset.oDel + '? The stored credentials are deleted.')) return;
+          await api('/providers/' + btn.dataset.oDel, { method: 'DELETE' });
+          await Promise.all([refreshOAuth(), refreshProviders()]);
         };
       });
     }
@@ -781,7 +1002,7 @@
       $('app').classList.remove('hidden');
       applyRoleUI();
       await loadCatalog();
-      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshUsers()]);
+      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshUsers(), loadOAuthVendors().then(refreshOAuth)]);
     }
 
     $('login-btn').onclick = async () => {
