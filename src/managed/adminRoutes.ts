@@ -24,6 +24,7 @@ import {
 } from './fetchModels';
 import { parseModelsJson } from './modelRouting';
 import { generateInviteCode, hashInviteCode, invitePrefix } from './invites';
+import { createOAuthRoutes } from './oauthRoutes';
 import type { ManagedEnv } from './types';
 
 type AuthUser = { userId: number; email: string; role: 'admin' | 'user' };
@@ -85,6 +86,9 @@ function userFilter(auth: AuthUser): { sql: string; binds: unknown[] } {
 
 export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
   const admin = new Hono<{ Bindings: ManagedEnv }>();
+
+  // Subscription-account (OAuth) providers. Guarded by the same admin session.
+  admin.route('/oauth', createOAuthRoutes(requirePlatformAdmin));
 
   admin.post('/login', async (c) => {
     const env = c.env;
@@ -256,11 +260,20 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     }
     const id = c.req.param('id');
     const row = await c.env.DB.prepare(
-      `SELECT api_key FROM providers WHERE id = ? AND is_active = 1`
+      `SELECT api_key, auth_type FROM providers WHERE id = ? AND is_active = 1`
     )
       .bind(id)
-      .first<{ api_key: string }>();
+      .first<{ api_key: string; auth_type: string | null }>();
     if (!row) return c.json({ status: 'failure', message: 'Provider not found' }, 404);
+    if (row.auth_type === 'oauth') {
+      return c.json(
+        {
+          status: 'failure',
+          message: 'Subscription (OAuth) providers have no live model list; edit their models from the Subscriptions tab.',
+        },
+        400
+      );
+    }
     const { decryptProviderKey } = await import('./encryption');
     let apiKey: string;
     try {
@@ -296,12 +309,12 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
     const rows = await c.env.DB.prepare(
-      `SELECT id, name, models, is_active, created_at FROM providers ORDER BY id`
+      `SELECT id, name, models, is_active, created_at, auth_type FROM providers ORDER BY id`
     ).all();
     const results = (rows.results ?? []).map((r) => ({
       ...r,
       models: parseModelsJson(String((r as { models: string }).models)),
-      has_api_key: true,
+      has_api_key: (r as { auth_type?: string }).auth_type !== 'oauth',
     }));
     return c.json({ providers: results });
   });
@@ -331,6 +344,12 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     const modelsJson = JSON.stringify(body.models ?? []);
     const encrypted = await encryptProviderKey(apiKey, enc);
     const isActive = body.is_active === false ? 0 : 1;
+    // Saving an API key under an id that was OAuth deliberately disconnects
+    // the subscription: leaving auth_type='oauth' behind would keep routing on
+    // the stale credential while the admin believes they set a key.
+    // oauth_version is incremented rather than reset so that a refresh already
+    // in flight loses its compare-and-swap; resetting to 0 would let a refresh
+    // that read version 0 write its credentials back onto this api_key row.
     await c.env.DB.prepare(
       `INSERT INTO providers (id, name, api_key, models, is_active)
        VALUES (?, ?, ?, ?, ?)
@@ -338,7 +357,15 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
          name = excluded.name,
          api_key = excluded.api_key,
          models = excluded.models,
-         is_active = excluded.is_active`
+         is_active = excluded.is_active,
+         auth_type = 'api_key',
+         oauth_vendor = NULL,
+         oauth_credentials = NULL,
+         oauth_expires_at = NULL,
+         oauth_account_label = NULL,
+         oauth_version = providers.oauth_version + 1,
+         owner_only = 0,
+         owner_user_id = NULL`
     )
       .bind(id, name, encrypted, modelsJson, isActive)
       .run();

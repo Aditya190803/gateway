@@ -3,12 +3,13 @@ import { hashApiKey } from '../../managed/apiKeys';
 import {
   aggregateModelsFromProviders,
   applyProviderHeaders,
-  decryptActiveProviderKey,
+  resolveProviderCredential,
 } from '../../managed/injectProvider';
 import {
   matchProviderWithDefaults,
   parseModelsJson,
 } from '../../managed/modelRouting';
+import { vendorServesPath } from '../../managed/oauth';
 import {
   hasLegacyPortkeyAuth,
   isManagedUserApiKey,
@@ -158,13 +159,26 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     );
   }
 
+  // Owner-only providers (subscription seats) are visible only to keys owned by
+  // the account that connected them, so routing never picks one for someone else.
   const providerRows = await env.DB.prepare(
-    `SELECT id, models FROM providers WHERE is_active = 1`
-  ).all<{ id: string; models: string }>();
+    `SELECT id, models, auth_type, oauth_vendor FROM providers
+      WHERE is_active = 1
+        AND (owner_only = 0 OR owner_user_id = ?)`
+  )
+    .bind(keyRow.user_id)
+    .all<{
+      id: string;
+      models: string;
+      auth_type: string | null;
+      oauth_vendor: string | null;
+    }>();
 
   const providerModels = (providerRows.results ?? []).map((r) => ({
     id: r.id,
     models: parseModelsJson(r.models),
+    authType: r.auth_type,
+    vendor: r.oauth_vendor,
   }));
 
   c.set(MANAGED_API_KEY, keyRow);
@@ -187,7 +201,16 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     return c.json(list);
   }
 
-  const providerId = matchProviderWithDefaults(model!, providerModels);
+  // A subscription backend may expose only part of the vendor's API surface.
+  // Filtering before the match means an unsupported path falls through to a
+  // metered provider for the same model instead of routing into a 404 upstream.
+  // The models listing above intentionally skips this filter: those models are
+  // still real, they just are not reachable on every path.
+  const routableProviders = providerModels.filter(
+    (p) => p.authType !== 'oauth' || vendorServesPath(p.vendor, path)
+  );
+
+  const providerId = matchProviderWithDefaults(model!, routableProviders);
   if (!providerId) {
     return c.json(
       {
@@ -200,12 +223,27 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     );
   }
 
-  const providerApiKey = await decryptActiveProviderKey(env, providerId);
-  if (!providerApiKey) {
+  const credential = await resolveProviderCredential(env, providerId);
+  if (!credential.ok) {
+    const err = credential.error;
+    // Name the provider that needs reconnecting rather than returning a bare
+    // 503, but keep the vendor's own error text out of the response: it is
+    // relayed verbatim from the token endpoint and can carry account or token
+    // detail. The operator gets the full text from the log line below and from
+    // the admin-only POST /admin/oauth/:id/refresh.
+    if (err.kind === 'oauth') {
+      console.error(
+        `[managed] oauth credential failure for provider ${providerId}: ${err.message}`
+      );
+    }
+    const message =
+      err.kind === 'oauth'
+        ? `Provider ${providerId} is not usable right now; its subscription login needs to be reconnected.`
+        : 'Provider not available or decryption failed';
     return c.json(
       {
         error: {
-          message: 'Provider not available or decryption failed',
+          message,
           type: 'server_error',
         },
       },
@@ -218,7 +256,7 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   c.req.raw = applyProviderHeaders(
     c.req.raw,
     providerId,
-    providerApiKey,
+    credential.value,
     c.req.raw.body
   );
 

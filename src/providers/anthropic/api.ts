@@ -6,9 +6,14 @@ const AnthropicAPIConfig: ProviderAPIConfig = {
   headers: ({ providerOptions, fn, gatewayRequestBody }) => {
     const apiKey =
       providerOptions.apiKey || providerOptions.anthropicApiKey || '';
-    const headers: Record<string, string> = {
-      'X-API-Key': apiKey,
-    };
+    const headers: Record<string, string> = {};
+    // Only send X-API-Key when there is actually a key. A subscription (OAuth)
+    // credential authenticates with Authorization: Bearer instead, and Anthropic
+    // validates X-API-Key first when both are present — so an empty one here
+    // would mask the bearer token and fail as "invalid x-api-key".
+    if (apiKey) {
+      headers['X-API-Key'] = apiKey;
+    }
 
     // Accept anthropic_beta and anthropic_version in body to support enviroments which cannot send it in headers.
     const betaHeader =
