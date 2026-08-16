@@ -88,10 +88,22 @@ an account that never authorized it.
 
 ### Concurrent refresh
 
-Both vendors rotate refresh tokens. If two in-flight requests both refresh and
-both write, the slower write restores a refresh token the vendor has already
-invalidated, and the *next* refresh fails. Writes are therefore guarded on
-`oauth_version`; the loser re-reads and uses the winner's tokens.
+These vendors rotate refresh tokens, so the refresh **call** has to be
+exclusive, not just the write. Two requests that both read version `N` and both
+call the vendor with the same refresh token spend it twice: one rotation wins
+and the other is invalidated, and under reuse detection the whole token family
+can be revoked — which kills the seat until an operator reconnects it. Guarding
+only the write is too late; the damage happens at the vendor.
+
+So a refresh is claimed before the network call, with a conditional
+`UPDATE … SET oauth_version = oauth_version + 1 WHERE id = ? AND oauth_version = ?`.
+Exactly one caller moves the row off version `N` and only that caller talks to
+the vendor. Others wait briefly for it to publish, then use its tokens.
+
+A claimer that dies mid-refresh leaves the version bumped and the credentials
+untouched. That is self-healing: the row is still expired, so the next request
+claims the new version and retries. The admin refresh endpoint takes the same
+claim, so pressing **Refresh** during an in-flight refresh cannot double-spend.
 
 ---
 
@@ -124,16 +136,20 @@ real CLI first, then import the result:
 codex login              # writes ~/.codex/auth.json
 ```
 
+The request body is built on stdin and piped in. Do not pass it with `-d "$(…)"`
+— that puts your access and refresh tokens in the argument list of both `jq` and
+`curl`, where any local process listing can read them.
+
 ```bash
-curl -X POST https://<gateway>/admin/oauth/import \
-  -H 'content-type: application/json' \
-  -b cookie.txt \
-  -d "$(jq -n --argjson creds "$(cat ~/.codex/auth.json)" '{
-        vendor: "openai-codex",
-        provider_id: "chatgpt-sub",
-        provider_name: "ChatGPT Pro seat",
-        credentials: $creds
-      }')"
+jq -n --slurpfile creds ~/.codex/auth.json '{
+      vendor: "openai-codex",
+      provider_id: "chatgpt-sub",
+      provider_name: "ChatGPT Pro seat",
+      credentials: $creds[0]
+    }' | curl -X POST https://<gateway>/admin/oauth/import \
+      -H 'content-type: application/json' \
+      -b cookie.txt \
+      --data-binary @-
 ```
 
 The imported access token is marked stale on purpose, so the first request

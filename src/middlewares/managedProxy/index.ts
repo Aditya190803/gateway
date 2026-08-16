@@ -226,11 +226,19 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   const credential = await resolveProviderCredential(env, providerId);
   if (!credential.ok) {
     const err = credential.error;
-    // An expired or revoked subscription login is the operator's problem to fix,
-    // so name the provider that needs reconnecting rather than a bare 503.
+    // Name the provider that needs reconnecting rather than returning a bare
+    // 503, but keep the vendor's own error text out of the response: it is
+    // relayed verbatim from the token endpoint and can carry account or token
+    // detail. The operator gets the full text from the log line below and from
+    // the admin-only POST /admin/oauth/:id/refresh.
+    if (err.kind === 'oauth') {
+      console.error(
+        `[managed] oauth credential failure for provider ${providerId}: ${err.message}`
+      );
+    }
     const message =
       err.kind === 'oauth'
-        ? `Provider ${providerId}: ${err.message}`
+        ? `Provider ${providerId} is not usable right now; its subscription login needs to be reconnected.`
         : 'Provider not available or decryption failed';
     return c.json(
       {

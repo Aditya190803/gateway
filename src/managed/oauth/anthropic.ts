@@ -33,6 +33,7 @@ const AUTHORIZE_URL = 'https://claude.ai/oauth/authorize';
 const TOKEN_URL = 'https://console.anthropic.com/v1/oauth/token';
 const REDIRECT_URI = 'https://console.anthropic.com/oauth/code/callback';
 const SCOPES = 'org:create_api_key user:profile user:inference';
+const TOKEN_TIMEOUT_MS = 15000;
 
 /** Claude Code's client identity. The server-side check keys off these. */
 const CLIENT_HEADERS: Record<string, string> = {
@@ -88,6 +89,8 @@ async function postToken(
       'user-agent': 'anthropic',
     },
     body: JSON.stringify(body),
+    // Bounded like the registered adapter's, so this stays correct as an example.
+    signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
   });
   const text = await res.text();
   if (!res.ok) {

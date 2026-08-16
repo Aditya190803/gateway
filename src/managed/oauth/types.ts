@@ -80,7 +80,11 @@ export interface OAuthAdapter {
   /**
    * Parse credentials the vendor's own CLI already wrote to disk, so an
    * existing login can be imported instead of re-running the flow.
-   * Returns null when the blob is not in this vendor's format.
+   *
+   * Returns null when the blob is not in this vendor's format. Throws when it
+   * IS this vendor's format but is missing something the adapter needs to make
+   * a call — the two cases want different messages, and an unusable import must
+   * fail at import rather than as an opaque upstream rejection later.
    */
   importFromFile?(blob: unknown): OAuthTokens | null;
 

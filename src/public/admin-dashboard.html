@@ -750,7 +750,12 @@
       tb.querySelectorAll('[data-del]').forEach((btn) => {
         btn.onclick = async () => {
           if (!confirm('Remove ' + btn.dataset.del + '?')) return;
-          await api('/providers/' + btn.dataset.del, { method: 'DELETE' });
+          try {
+            await api('/providers/' + btn.dataset.del, { method: 'DELETE' });
+          } catch (e) {
+            alert(e.message);
+            return;
+          }
           await refreshProviders();
         };
       });
@@ -975,7 +980,13 @@
       tb.querySelectorAll('[data-o-del]').forEach((btn) => {
         btn.onclick = async () => {
           if (!confirm('Disconnect ' + btn.dataset.oDel + '? The stored credentials are deleted.')) return;
-          await api('/providers/' + btn.dataset.oDel, { method: 'DELETE' });
+          try {
+            await api('/providers/' + btn.dataset.oDel, { method: 'DELETE' });
+          } catch (e) {
+            // Leave the row in place: it is still connected if the delete failed.
+            oauthStatus(e.message, true);
+            return;
+          }
           await Promise.all([refreshOAuth(), refreshProviders()]);
         };
       });

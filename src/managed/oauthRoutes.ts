@@ -3,11 +3,7 @@ import { encryptProviderKey } from './encryption';
 import { parseModelsJson } from './modelRouting';
 import { getAdapter, listAdapters } from './oauth';
 import { createPkcePair, generateState } from './oauth/pkce';
-import {
-  decryptTokens,
-  getOAuthProviderRow,
-  persistTokens,
-} from './oauth/store';
+import { forceRefresh, getOAuthProviderRow } from './oauth/store';
 import type { OAuthTokens } from './oauth/types';
 import type { ManagedEnv } from './types';
 
@@ -17,6 +13,26 @@ type Guard = (
 ) => Promise<{ ok: true; user: AuthUser } | { ok: false; response: Response }>;
 
 const STATE_TTL_MS = 10 * 60 * 1000;
+
+/**
+ * Every route here writes to or reads from D1. The admin app is mounted
+ * unconditionally and the session guard is JWT-only, so a deployment missing
+ * the binding reaches these handlers with a valid cookie and would otherwise
+ * fail on `env.DB.prepare` with an opaque 500. Match the 503 that the rest of
+ * the admin API returns.
+ */
+function requireDb(
+  c: Context,
+): { ok: true } | { ok: false; response: Response } {
+  if ((c.env as ManagedEnv).DB) return { ok: true };
+  return {
+    ok: false,
+    response: c.json(
+      { status: 'failure', message: 'Database not configured' },
+      503,
+    ),
+  };
+}
 
 function encryptionKey(env: ManagedEnv): string | null {
   const s = env.PROVIDER_KEY_ENCRYPTION_KEY?.trim();
@@ -167,6 +183,8 @@ export function createOAuthRoutes(
   app.post('/start', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
 
     let body: {
       vendor?: string;
@@ -251,6 +269,8 @@ export function createOAuthRoutes(
   app.post('/complete', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
 
     let body: {
       state?: string;
@@ -371,6 +391,8 @@ export function createOAuthRoutes(
   app.post('/import', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
 
     let body: {
       vendor?: string;
@@ -423,7 +445,19 @@ export function createOAuthRoutes(
       }
     }
 
-    const tokens = adapter.importFromFile(blob);
+    let tokens: OAuthTokens | null;
+    try {
+      tokens = adapter.importFromFile(blob);
+    } catch (e) {
+      // Right format, but unusable — the adapter's own message says why.
+      return c.json(
+        {
+          status: 'failure',
+          message: e instanceof Error ? e.message : 'Credentials are unusable',
+        },
+        400,
+      );
+    }
     if (!tokens) {
       return c.json(
         {
@@ -456,6 +490,8 @@ export function createOAuthRoutes(
   app.get('/providers', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
     const rows = await c.env.DB.prepare(
       `SELECT id, name, models, oauth_vendor, oauth_expires_at, oauth_account_label,
               owner_only, owner_user_id, is_active
@@ -492,6 +528,8 @@ export function createOAuthRoutes(
   app.post('/:id/models', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
 
     const id = c.req.param('id');
     let body: { models?: unknown };
@@ -532,63 +570,21 @@ export function createOAuthRoutes(
   app.post('/:id/refresh', async (c) => {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
 
-    const id = c.req.param('id');
-    const row = await getOAuthProviderRow(c.env, id);
-    if (!row || row.auth_type !== 'oauth') {
-      return c.json(
-        { status: 'failure', message: 'Not an OAuth provider' },
-        404,
-      );
+    // Takes the same claim the request path takes, so pressing this while a
+    // request-path refresh is in flight cannot spend the token twice. It is a
+    // credential-only write: model list and ownership are left alone.
+    const result = await forceRefresh(c.env, c.req.param('id'));
+    if (!result.ok) {
+      const status = result.message === 'Not an OAuth provider' ? 404 : 502;
+      return c.json({ status: 'failure', message: result.message }, status);
     }
-    const adapter = getAdapter(row.oauth_vendor);
-    if (!adapter) {
-      return c.json(
-        { status: 'failure', message: 'Unknown OAuth vendor' },
-        400,
-      );
-    }
-    const tokens = await decryptTokens(c.env, row);
-    if (!tokens?.refresh_token) {
-      return c.json(
-        { status: 'failure', message: 'No refresh token stored' },
-        400,
-      );
-    }
-
-    try {
-      const refreshed = await adapter.refresh(tokens);
-      // Credential-only write: leaves the configured model list and ownership
-      // untouched, and the version guard keeps it safe against a concurrent
-      // refresh on the request path.
-      const written = await persistTokens(
-        c.env,
-        row.id,
-        refreshed,
-        row.oauth_version,
-      );
-      if (!written) {
-        return c.json(
-          {
-            status: 'failure',
-            message: 'Credentials changed concurrently; retry',
-          },
-          409,
-        );
-      }
-      return c.json({
-        status: 'success',
-        expires_at: new Date(refreshed.expires_at).toISOString(),
-      });
-    } catch (e) {
-      return c.json(
-        {
-          status: 'failure',
-          message: e instanceof Error ? e.message : 'Refresh failed',
-        },
-        502,
-      );
-    }
+    return c.json({
+      status: 'success',
+      expires_at: new Date(result.tokens.expires_at).toISOString(),
+    });
   });
 
   return app;

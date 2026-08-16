@@ -25,5 +25,10 @@ export {
   registerAdapter,
   vendorServesPath,
 } from './registry';
-export { resolveOAuthCredential, persistTokens, decryptTokens } from './store';
+export {
+  resolveOAuthCredential,
+  persistTokens,
+  decryptTokens,
+  forceRefresh,
+} from './store';
 export * from './types';

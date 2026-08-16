@@ -32,6 +32,7 @@ const TOKEN_URL = 'https://auth.openai.com/oauth/token';
 const REDIRECT_URI = 'http://localhost:1455/auth/callback';
 const SCOPES = 'openid profile email offline_access';
 const BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+const TOKEN_TIMEOUT_MS = 15000;
 
 type TokenResponse = {
   access_token?: string;
@@ -109,10 +110,14 @@ function toTokens(raw: TokenResponse, previous?: OAuthTokens): OAuthTokens {
 async function postToken(
   body: Record<string, unknown>,
 ): Promise<TokenResponse> {
+  // Bounded: this runs on the request path during refresh, so a vendor endpoint
+  // that accepts the connection and then stalls would otherwise hold the caller
+  // until the platform kills the whole request.
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
   });
   const text = await res.text();
   if (!res.ok) {
@@ -216,6 +221,16 @@ export const openaiCodexAdapter: OAuthAdapter = {
       typeof tokensNode.account_id === 'string'
         ? tokensNode.account_id
         : undefined;
+
+    // decorate() sends this as chatgpt-account-id, and the backend rejects the
+    // request without it. Import is the only onboarding route for this vendor,
+    // so refuse here rather than let the first inference fail opaquely.
+    if (!accountId && !fileAccountId) {
+      throw new Error(
+        'No ChatGPT account id found in the credential file. Re-run `codex login` ' +
+          'and import the regenerated ~/.codex/auth.json.',
+      );
+    }
 
     return {
       access_token: access,

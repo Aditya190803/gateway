@@ -347,6 +347,9 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     // Saving an API key under an id that was OAuth deliberately disconnects
     // the subscription: leaving auth_type='oauth' behind would keep routing on
     // the stale credential while the admin believes they set a key.
+    // oauth_version is incremented rather than reset so that a refresh already
+    // in flight loses its compare-and-swap; resetting to 0 would let a refresh
+    // that read version 0 write its credentials back onto this api_key row.
     await c.env.DB.prepare(
       `INSERT INTO providers (id, name, api_key, models, is_active)
        VALUES (?, ?, ?, ?, ?)
@@ -360,7 +363,7 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
          oauth_credentials = NULL,
          oauth_expires_at = NULL,
          oauth_account_label = NULL,
-         oauth_version = 0,
+         oauth_version = providers.oauth_version + 1,
          owner_only = 0,
          owner_user_id = NULL`
     )
