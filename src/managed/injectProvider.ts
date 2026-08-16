@@ -113,7 +113,12 @@ export function applyProviderHeaders(
   const gatewayProvider = credential.gatewayProvider || providerId;
   const config: Record<string, unknown> = {
     provider: gatewayProvider,
-    api_key: credential.token,
+    // When the adapter names its own auth header, the credential travels only
+    // in that header. Handing it to the provider as well would additionally
+    // populate the provider's default auth slot (Anthropic's X-API-Key, say),
+    // and a vendor that validates that slot first rejects the request before it
+    // ever looks at the bearer token.
+    api_key: credential.authHeader ? '' : credential.token,
   };
   if (credential.customHost) {
     config.custom_host = credential.customHost;

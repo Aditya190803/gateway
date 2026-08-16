@@ -1,3 +1,5 @@
+import { asRecord, parseExpiry, pickString } from './credentialFiles';
+import { fetchModelIds } from './modelList';
 import { decodeJwtPayload } from './pkce';
 import type {
   AuthorizeRequest,
@@ -33,6 +35,15 @@ const REDIRECT_URI = 'http://localhost:1455/auth/callback';
 const SCOPES = 'openid profile email offline_access';
 const BACKEND_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 const TOKEN_TIMEOUT_MS = 15000;
+/**
+ * Codex CLI version we present.
+ *
+ * The backend gates its model catalog on this: every model carries a
+ * `minimal_client_version`, and anything newer than the version we claim is
+ * filtered out. Too low a value returns an empty list rather than an error, so
+ * this has to track a current CLI release to see the current models.
+ */
+const CLIENT_VERSION = '0.144.0';
 
 type TokenResponse = {
   access_token?: string;
@@ -107,16 +118,18 @@ function toTokens(raw: TokenResponse, previous?: OAuthTokens): OAuthTokens {
   };
 }
 
-async function postToken(
-  body: Record<string, unknown>,
-): Promise<TokenResponse> {
+async function postToken(body: Record<string, string>): Promise<TokenResponse> {
+  // Form-encoded, per OAuth 2.0 and what the Codex CLI itself sends.
   // Bounded: this runs on the request path during refresh, so a vendor endpoint
   // that accepts the connection and then stalls would otherwise hold the caller
   // until the platform kills the whole request.
   const res = await fetch(TOKEN_URL, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      accept: 'application/json',
+    },
+    body: new URLSearchParams(body).toString(),
     signal: AbortSignal.timeout(TOKEN_TIMEOUT_MS),
   });
   const text = await res.text();
@@ -137,9 +150,14 @@ export const openaiCodexAdapter: OAuthAdapter = {
   label: 'ChatGPT Plus/Pro (Codex login)',
   gatewayProvider: 'openai',
   callbackPath: '/auth/callback',
-  // The redirect target is a fixed localhost port, so there is no code to paste
-  // from a hosted flow; importing auth.json is the supported route.
-  supportsManualCode: false,
+  /**
+   * The redirect target is a fixed localhost port that this gateway cannot
+   * receive. That is still workable in a browser: approving sends you to
+   * http://localhost:1455/auth/callback?code=…, which fails to load, and the
+   * code sits in the address bar for you to paste back. Importing auth.json
+   * remains the alternative.
+   */
+  supportsManualCode: true,
 
   buildAuthorizeUrl({
     redirectUri,
@@ -155,6 +173,7 @@ export const openaiCodexAdapter: OAuthAdapter = {
       scope: SCOPES,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
+      prompt: 'login',
       id_token_add_organizations: 'true',
       codex_cli_simplified_flow: 'true',
       state,
@@ -186,11 +205,27 @@ export const openaiCodexAdapter: OAuthAdapter = {
     return toTokens(raw, tokens);
   },
 
+  async listModels(tokens: OAuthTokens): Promise<string[]> {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${tokens.access_token}`,
+      'user-agent': `codex_cli_rs/${CLIENT_VERSION} (external)`,
+      originator: 'codex_cli_rs',
+    };
+    if (tokens.account_id) headers['chatgpt-account-id'] = tokens.account_id;
+    // The backend rejects the listing without client_version, and gates which
+    // models it returns on the value. It commonly answers with an empty list,
+    // in which case the caller keeps the configured models.
+    return fetchModelIds(
+      `${BACKEND_BASE_URL}/models?client_version=${CLIENT_VERSION}`,
+      headers,
+    );
+  },
+
   decorate(tokens: OAuthTokens): UpstreamCall {
     const headers: Record<string, string> = {
       'openai-beta': 'responses=experimental',
       originator: 'codex_cli_rs',
-      'user-agent': 'codex_cli_rs/0.0.0 (external)',
+      'user-agent': `codex_cli_rs/${CLIENT_VERSION} (external)`,
       // Codex sends a per-conversation id; the backend only requires presence.
       session_id: crypto.randomUUID(),
     };
@@ -206,21 +241,20 @@ export const openaiCodexAdapter: OAuthAdapter = {
     };
   },
 
-  /** Shape written by the Codex CLI at ~/.codex/auth.json. */
+  /**
+   * Shape written by the Codex CLI at ~/.codex/auth.json, and the flat auth
+   * file a proxy writes after running that login for you.
+   */
   importFromFile(blob: unknown): OAuthTokens | null {
-    if (!blob || typeof blob !== 'object') return null;
-    const root = blob as Record<string, unknown>;
-    const tokensNode = (root.tokens ?? root) as Record<string, unknown>;
-    const access = tokensNode.access_token;
-    if (typeof access !== 'string' || !access) return null;
+    const root = asRecord(blob);
+    if (!root) return null;
+    const tokensNode = asRecord(root.tokens) ?? root;
+    const access = pickString(tokensNode, 'access_token', 'accessToken');
+    if (!access) return null;
 
-    const idToken =
-      typeof tokensNode.id_token === 'string' ? tokensNode.id_token : undefined;
+    const idToken = pickString(tokensNode, 'id_token', 'idToken');
     const { accountId, planType, email } = accountIdFromIdToken(idToken);
-    const fileAccountId =
-      typeof tokensNode.account_id === 'string'
-        ? tokensNode.account_id
-        : undefined;
+    const fileAccountId = pickString(tokensNode, 'account_id', 'accountId');
 
     // decorate() sends this as chatgpt-account-id, and the backend rejects the
     // request without it. Import is the only onboarding route for this vendor,
@@ -234,14 +268,11 @@ export const openaiCodexAdapter: OAuthAdapter = {
 
     return {
       access_token: access,
-      refresh_token:
-        typeof tokensNode.refresh_token === 'string'
-          ? tokensNode.refresh_token
-          : undefined,
-      // auth.json records last_refresh rather than an expiry. Treat an imported
-      // token as already stale so the first request refreshes it and we learn
-      // the real lifetime from the response.
-      expires_at: 0,
+      refresh_token: pickString(tokensNode, 'refresh_token', 'refreshToken'),
+      // auth.json records last_refresh rather than an expiry, so unless the file
+      // states one, treat the token as already stale: the first request then
+      // refreshes it and learns the real lifetime from the response.
+      expires_at: parseExpiry(tokensNode.expired ?? tokensNode.expires_at) ?? 0,
       account_id: accountId ?? fileAccountId,
       extra: {
         ...(idToken ? { id_token: idToken } : {}),
@@ -253,11 +284,14 @@ export const openaiCodexAdapter: OAuthAdapter = {
 
   credentialFileHint: '~/.codex/auth.json (created by `codex login`)',
 
-  // Deliberately narrow. A bare 'gpt-5' entry here is a prefix, so it would
-  // capture every gpt-5* request the owner makes — including ones meant for a
-  // metered OpenAI key — and send them to a host that only speaks Responses.
-  // Widen this only with model ids this backend genuinely serves.
-  defaultModels: ['gpt-5-codex'],
+  /**
+   * Fallback only — listModels asks the backend what this account really has.
+   * These are the models the Codex backend serves, which are not the public
+   * OpenAI model names: there is no gpt-5-codex here. Keep entries specific,
+   * because matching is by prefix and a bare 'gpt-5' would capture every
+   * gpt-5* request the owner makes.
+   */
+  defaultModels: ['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5'],
 
   supportedPaths: ['/v1/responses'],
 };

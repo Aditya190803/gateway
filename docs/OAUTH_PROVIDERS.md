@@ -2,51 +2,75 @@
 
 The gateway normally talks to model vendors with a metered API key. This adds a
 second credential type: a **subscription account's OAuth tokens**, so the
-gateway can serve requests from a Claude Pro/Max or ChatGPT Plus/Pro seat
-instead of a pay-per-token key.
+gateway can serve requests from a ChatGPT, Claude, or Grok seat instead of a
+pay-per-token key.
 
-Read the [Feasibility](#feasibility) section before you invest time in this.
-One of the two vendors actively blocks it.
+Read [What you are agreeing to](#what-you-are-agreeing-to) before you invest
+time in this.
 
 ---
 
-## Feasibility
+## Vendors
 
-| Vendor | Adapter id | Status | Notes |
-|---|---|---|---|
-| ChatGPT Plus/Pro (Codex) | `openai-codex` | Registered, with caveats | Callback is a fixed `localhost:1455`, so credentials must be imported rather than authorized in-gateway. Responses API only. |
-| Claude Pro/Max (Claude Code) | `anthropic-claude-code` | **Not registered — disabled** | Impersonates Claude Code's client identity; see below. |
+| Vendor | Adapter id | Gateway provider | Browser authorization | Serves |
+|---|---|---|---|---|
+| ChatGPT Plus/Pro (Codex) | `openai-codex` | `openai` | Approve, paste the URL back | `/v1/responses` only |
+| Claude Pro/Max (Claude Code) | `anthropic-claude-code` | `anthropic` | Approve, paste the URL back | Full Anthropic surface |
+| Grok (Grok CLI) | `xai-grok-cli` | `x-ai` | Type a code into xAI's page | Chat, via the CLI chat proxy |
 
-### Anthropic: disabled on purpose
+All three can be connected in the browser from Subscriptions → Connect an
+account, and all three can alternatively be connected by importing a credential
+file. Both routes end in the same place.
 
-The adapter file (`src/managed/oauth/anthropic.ts`) exists but is **not
-registered** in `src/managed/oauth/index.ts`, so it is unreachable from the API
-and the dashboard.
+### Browser authorization
 
-Anthropic runs no OAuth program for third-party clients. The `client_id` the
-adapter uses belongs to Claude Code itself, and there is no way to register your
-own. Anthropic enforces this at the API: consumer-plan OAuth credentials used
-outside Claude Code and claude.ai are rejected with
+**Codex and Claude — approve, then paste back the URL.** These clients register
+a loopback redirect (`localhost:1455` and `localhost:54545`) that a deployed
+gateway cannot receive. That is fine: approving sends the browser to that
+address, the page fails with *"this site can't be reached"* because nothing is
+listening there, **and the authorization code is sitting in the address bar**.
+Copy the whole URL and paste it in. The bare code and Anthropic's `code#state`
+form are accepted too. A `state` that does not match the attempt is rejected.
 
-> This credential is only authorized for use with Claude Code and cannot be
-> used for other API requests.
+**Grok — type a code into xAI's page.** xAI's client authorizes by device code
+(RFC 8628), so there is nothing to paste back: the gateway shows a short code
+and a link to `accounts.x.ai/oauth2/device`, and polls until you approve.
 
-The adapter reproduces Claude Code's client headers exactly (`anthropic-beta:
-oauth-2025-04-20,claude-code-20250219`, `x-app: cli`, the `claude-cli`
-user-agent) — those headers exist for no reason other than to satisfy that
-check. That makes it both a Consumer Terms violation and an evasion of a vendor
-control, which is why it ships disabled rather than merely documented as risky.
+### Importing a credential file instead
 
-For Anthropic models, use an API key from console.anthropic.com with the normal
-`api_key` provider type. That path is supported, metered, and does not depend on
-undocumented endpoints.
+Run the vendor's CLI login and paste what it wrote. The parser accepts the
+native CLI file and the flatter auth file a proxy such as CLIProxyAPI writes,
+as JSON or as raw file contents:
 
-### OpenAI: what "works" means
+| Vendor | File |
+|---|---|
+| Codex | `~/.codex/auth.json` (`codex login`) |
+| Claude | `~/.claude/.credentials.json` — on macOS, Keychain item `Claude Code-credentials` |
+| Grok | the auth JSON the Grok CLI login writes (`"type": "xai"`) |
 
-Subscription auth is licensed for interactive use, not for backend services.
-Putting a proxy in front of it is outside what that licence covers, and the
-tokens in `~/.codex/auth.json` are password-equivalent — treat them like a
-password, because anyone holding them can spend or impersonate your account.
+## What you are agreeing to
+
+Every adapter authenticates with a `client_id` belonging to the vendor's own
+CLI, because none of these vendors register third-party clients. That has
+consequences worth stating plainly:
+
+- **It is a terms violation on the account you connect.** Subscription auth is
+  licensed for interactive use in the vendor's own client, not for fronting with
+  a proxy. The account you connect is the one at risk.
+- **It can break without notice.** None of these endpoints are a public API.
+  Client ids, hosts, scopes, and required headers change with CLI releases.
+- **Anthropic enforces it server-side.** Consumer-plan OAuth credentials used
+  outside Claude Code and claude.ai are rejected with *"This credential is only
+  authorized for use with Claude Code and cannot be used for other API
+  requests."* The adapter sends Claude Code's client headers because that is
+  what the check keys off. Expect it to fail, and expect any workaround to stop
+  working.
+
+A metered API key remains the supported path for all three vendors, and the
+`api_key` provider type is unchanged. Use it where reliability matters.
+
+Treat these tokens as password-equivalent: anyone holding them can spend or
+impersonate the account.
 
 ---
 
@@ -246,9 +270,11 @@ serves less than the vendor's full API, and keep `defaultModels` specific
 (they are prefixes). Nothing else in the request path is vendor-aware.
 Registration and removal are both one line.
 
-Do not add a vendor by borrowing another client's `client_id` and reproducing
-its headers to get past a server-side client check. That is what got the
-Anthropic adapter disabled.
+Prefer `importFromFile` over an in-gateway flow. Every vendor here registers a
+loopback redirect that a deployed gateway cannot receive, so importing the
+credential the vendor's CLI already wrote is what actually works. The helpers in
+`credentialFiles.ts` cover the shapes these files come in — nested or flat, with
+expiry as epoch milliseconds, epoch seconds, or an RFC 3339 string.
 
 Vendors deliberately **not** implemented, and why:
 

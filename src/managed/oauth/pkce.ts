@@ -36,6 +36,41 @@ export async function createPkcePair(): Promise<{
 }
 
 /**
+ * Read the authorization code out of whatever the operator pasted.
+ *
+ * Every one of these vendors redirects to a loopback URL that nothing is
+ * listening on, so the browser lands on "connection refused" with the code
+ * sitting in the address bar. Pasting that whole URL is the natural thing to do,
+ * so accept it — along with the bare code, and the "code#state" form Anthropic's
+ * console displays.
+ */
+export function parsePastedCode(input: string): {
+  code: string;
+  state?: string;
+} {
+  const raw = input.trim();
+  if (!raw) return { code: '' };
+
+  if (/^https?:\/\//i.test(raw)) {
+    try {
+      const url = new URL(raw);
+      const code = url.searchParams.get('code');
+      if (code) {
+        return {
+          code,
+          state: url.searchParams.get('state') ?? undefined,
+        };
+      }
+    } catch {
+      // Not a URL after all; fall through to the bare forms.
+    }
+  }
+
+  const [code, state] = raw.split('#', 2);
+  return { code: code.trim(), state: state?.trim() || undefined };
+}
+
+/**
  * Decode a JWT payload without verifying it.
  *
  * Only for reading non-security claims out of an id_token the vendor just

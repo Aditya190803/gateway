@@ -49,6 +49,43 @@ export type ExchangeRequest = {
   state?: string;
 };
 
+/**
+ * A device authorization (RFC 8628) in progress.
+ *
+ * Used by vendors whose client has no redirect a gateway can make use of. The
+ * operator opens a URL, types a short code, and the gateway polls for the
+ * result — a browser authorization with nothing to paste back.
+ */
+export type DeviceAuthorization = {
+  /** Secret the gateway polls with. Never shown to the operator. */
+  deviceCode: string;
+  /** Short code the operator types into the vendor's page. */
+  userCode: string;
+  verificationUri: string;
+  /** Same page with the code pre-filled, when the vendor provides one. */
+  verificationUriComplete?: string;
+  intervalMs: number;
+  /** Epoch ms after which the device code is dead. */
+  expiresAt: number;
+};
+
+/**
+ * One poll attempt. `pending` carries the interval back because a vendor can
+ * answer `slow_down`, which requires backing off before the next poll.
+ */
+export type DevicePollResult =
+  | { status: 'complete'; tokens: OAuthTokens }
+  | { status: 'pending'; intervalMs: number };
+
+export interface DeviceFlow {
+  start(): Promise<DeviceAuthorization>;
+  /**
+   * Poll once. Throws when the authorization ends unsuccessfully — expired,
+   * denied, or a protocol error the operator has to act on.
+   */
+  poll(deviceCode: string, intervalMs: number): Promise<DevicePollResult>;
+}
+
 export interface OAuthAdapter {
   /** Stable adapter id, stored in providers.oauth_vendor. */
   id: string;
@@ -69,6 +106,13 @@ export interface OAuthAdapter {
    * gateway-hosted callback. When true the admin UI offers a paste box.
    */
   supportsManualCode: boolean;
+
+  /**
+   * Device authorization, for a vendor whose client registers no redirect worth
+   * using. Mutually exclusive with supportsManualCode in practice: both are
+   * "browser authorization", they differ only in which side carries the code.
+   */
+  device?: DeviceFlow;
 
   buildAuthorizeUrl(req: AuthorizeRequest): string;
   exchangeCode(req: ExchangeRequest): Promise<OAuthTokens>;
@@ -93,6 +137,14 @@ export interface OAuthAdapter {
 
   /** Models to seed the provider row with, so routing works immediately. */
   defaultModels: string[];
+
+  /**
+   * Ask the vendor which models this account can actually use, so the operator
+   * does not have to type the list. Best-effort: callers fall back to
+   * defaultModels when it throws, because a subscription backend may not serve
+   * a listing at all.
+   */
+  listModels?(tokens: OAuthTokens): Promise<string[]>;
 
   /**
    * Request paths this credential can actually serve, as prefixes. A

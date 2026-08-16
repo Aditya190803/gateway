@@ -453,7 +453,7 @@
 
       <section id="panel-subscriptions" class="panel admin-only">
         <h2 class="page-title">Subscription accounts</h2>
-        <p class="section-lead">Serve requests from a ChatGPT Plus/Pro seat instead of a metered API key. Subscription providers are owner-only: only your own <code style="font-size:0.85em">sk-</code> keys can route to them, and each vendor serves only the API surface listed for it.</p>
+        <p class="section-lead">Serve requests from a ChatGPT, Claude, or Grok subscription instead of a metered API key. Sign in with the vendor's own CLI, then paste the credential JSON it wrote. Subscription providers are owner-only: only your own <code style="font-size:0.85em">sk-</code> keys can route to them, and each vendor serves only the API surface listed for it.</p>
         <div class="card">
           <h2 class="page-title" style="font-size:1.1rem">Connect an account</h2>
           <label for="o-vendor">Vendor</label>
@@ -469,8 +469,9 @@
               <input id="o-name" placeholder="ChatGPT Pro seat" autocomplete="off" />
             </div>
           </div>
-          <label for="o-models">Models to route (JSON)</label>
-          <input id="o-models" placeholder='["gpt-5-codex"]' autocomplete="off" />
+          <label for="o-models">Models to route (JSON) <span class="muted" style="font-weight:400">— optional</span></label>
+          <p class="muted" id="o-models-hint" style="margin:-0.25rem 0 0.5rem;font-size:0.8125rem"></p>
+          <input id="o-models" placeholder="leave blank to fetch from the vendor" autocomplete="off" />
           <div id="o-import-block">
             <label for="o-creds">Credentials JSON <span class="muted" id="o-cred-hint" style="font-weight:400"></span></label>
             <textarea id="o-creds" rows="4" style="font-family:var(--mono);font-size:0.75rem" placeholder='Paste the credential file contents here'></textarea>
@@ -485,10 +486,18 @@
             <div id="o-authz-step2" class="hidden">
               <p class="ok-msg" style="margin:0 0 0.35rem">1. Open the authorization page and approve:</p>
               <p style="margin:0 0 1rem"><a id="o-authz-url" href="#" target="_blank" rel="noopener" style="font-size:0.8rem;word-break:break-all;color:var(--blue)"></a></p>
-              <label for="o-code">2. Paste the code the vendor shows you</label>
-              <input id="o-code" placeholder="code#state" autocomplete="off" />
-              <div class="btn-row">
-                <button type="button" class="btn btn-primary" id="o-complete-btn">Complete connection</button>
+              <div id="o-paste-step">
+                <label for="o-code">2. Paste the URL you land on</label>
+                <p class="muted" style="margin:-0.25rem 0 0.5rem;font-size:0.8125rem">You will land on a <code style="font-size:0.85em">localhost</code> page that says it can't be reached — that is expected, nothing is listening there. Copy the whole address from your browser's address bar and paste it below.</p>
+                <input id="o-code" placeholder="http://localhost:54545/callback?code=…&amp;state=… (or just the code)" autocomplete="off" />
+                <div class="btn-row">
+                  <button type="button" class="btn btn-primary" id="o-complete-btn">Complete connection</button>
+                </div>
+              </div>
+              <div id="o-device-step" class="hidden">
+                <label>2. Enter this code on that page</label>
+                <p id="o-device-code" style="margin:0 0 0.5rem;font-family:var(--mono);font-size:1.5rem;letter-spacing:0.15em;font-weight:600"></p>
+                <p class="muted" id="o-device-wait" style="margin:0;font-size:0.8125rem">Waiting for you to approve…</p>
               </div>
             </div>
           </div>
@@ -828,26 +837,60 @@
       el.className = isErr ? 'err' : 'ok-msg';
     }
 
+    /* Fields the vendor suggests, and what it last suggested for each. A field
+       still holding the previous suggestion is untouched by the operator, so it
+       follows the vendor; anything else is their own text and is left alone. */
+    const suggestedValues = {};
+
+    function setSuggested(fieldId, value) {
+      const el = $(fieldId);
+      const current = el.value.trim();
+      if (!current || current === suggestedValues[fieldId]) el.value = value;
+      suggestedValues[fieldId] = value;
+    }
+
+    function suggestedProviderId(v) {
+      if (v.id === 'openai-codex') return 'chatgpt-sub';
+      if (v.id === 'anthropic-claude-code') return 'claude-sub';
+      if (v.id === 'xai-grok-cli') return 'grok-sub';
+      return v.id;
+    }
+
     function onOAuthVendorChange() {
       const v = oauthVendors.find((x) => x.id === $('o-vendor').value);
       if (!v) return;
-      if (!$('o-id').value) $('o-id').value = v.id === 'openai-codex' ? 'chatgpt-sub' : v.id;
-      if (!$('o-name').value) $('o-name').value = v.label;
-      $('o-models').value = JSON.stringify(v.default_models || []);
+      // Follow the vendor unless the operator has typed their own value. The
+      // previous check was "only fill when empty", which meant switching vendor
+      // left the last vendor's id and name sitting in the form.
+      setSuggested('o-id', suggestedProviderId(v));
+      setSuggested('o-name', v.label);
+      // Left blank on purpose: models are discovered from the vendor on connect.
+      // Filling anything here would count as an explicit list and suppress that.
+      $('o-models').value = '';
+      $('o-models-hint').textContent =
+        'Optional — left blank, the models this account can use are fetched from ' +
+        v.label + ' when you connect. Example: ' +
+        JSON.stringify((v.default_models || []).slice(0, 2));
       // Import is offered when the vendor's CLI writes a credential file we can parse.
       $('o-import-block').classList.toggle('hidden', !v.credential_file);
       $('o-cred-hint').textContent = v.credential_file ? '— usually at ' + v.credential_file : '';
-      // Browser authorization only works when the vendor hands back a paste-able code.
-      $('o-authz-block').classList.toggle('hidden', !v.supports_manual_code);
+      // Every vendor authorizes in the browser; they differ only in which side
+      // carries the code back.
+      $('o-authz-block').classList.toggle('hidden', !v.supports_manual_code && !v.supports_device_code);
       $('o-authz-step2').classList.add('hidden');
+      $('o-paste-step').classList.toggle('hidden', !v.supports_manual_code);
+      $('o-device-step').classList.toggle('hidden', !v.supports_device_code);
+      stopDevicePolling();
       oauthState = null;
       oauthOverwrite = false;
       const paths = (v.supported_paths || []).length
         ? ' Serves ' + v.supported_paths.join(', ') + ' only — other paths fall through to your API-key providers.'
         : '';
-      $('o-vendor-note').textContent = (v.supports_manual_code
-        ? 'Authorize in the browser, then paste the code the vendor shows you.'
-        : 'This vendor only allows a localhost callback, so the gateway cannot receive it. Log in with the vendor CLI, then import the credential file.') + paths;
+      $('o-vendor-note').textContent = (v.supports_device_code
+        ? 'Authorize in the browser: open the page shown and type in the code.'
+        : v.supports_manual_code
+          ? "Authorize in the browser, then paste back the localhost URL you land on. Or import the CLI's credential file below."
+          : "Log in with the vendor CLI, then import the credential file it wrote.") + paths;
     }
     $('o-vendor').onchange = onOAuthVendorChange;
 
@@ -859,25 +902,78 @@
       onOAuthVendorChange();
     }
 
+    /* Device authorization (RFC 8628). The browser drives the poll loop: an
+       operator can take minutes to approve, far longer than a request should
+       stay open on the Worker. */
+    let devicePollTimer = null;
+
+    function stopDevicePolling() {
+      if (devicePollTimer) { clearTimeout(devicePollTimer); devicePollTimer = null; }
+    }
+
+    function pollDeviceIn(delayMs) {
+      devicePollTimer = setTimeout(async () => {
+        if (!oauthState) return;
+        let data;
+        try {
+          const base = oauthInputs();
+          data = await api('/oauth/device/poll', { method: 'POST', body: JSON.stringify({
+            state: oauthState,
+            models: base.models.length ? base.models : undefined,
+            overwrite: oauthOverwrite,
+          }) });
+        } catch (e) {
+          stopDevicePolling();
+          oauthState = null;
+          $('o-authz-step2').classList.add('hidden');
+          oauthStatus(e.message, true);
+          return;
+        }
+        if (data.status === 'pending') { pollDeviceIn(data.retry_in_ms || 5000); return; }
+        stopDevicePolling();
+        oauthState = null;
+        oauthOverwrite = false;
+        $('o-authz-step2').classList.add('hidden');
+        oauthStatus('Account connected.', false);
+        await Promise.all([refreshOAuth(), refreshProviders()]);
+      }, delayMs);
+    }
+
     $('o-start-btn').onclick = async () => {
-      let payload;
+      let payload, vendor;
       try {
         const base = oauthInputs();
+        vendor = oauthVendors.find((x) => x.id === base.vendor);
         payload = { vendor: base.vendor, provider_id: base.provider_id, provider_name: base.provider_name };
       } catch (e) { oauthStatus(e.message, true); return; }
+      stopDevicePolling();
       oauthOverwrite = false;
+      const route = vendor?.supports_device_code ? '/oauth/device/start' : '/oauth/start';
       try {
         let data;
         try {
-          data = await api('/oauth/start', { method: 'POST', body: JSON.stringify(payload) });
+          data = await api(route, { method: 'POST', body: JSON.stringify(payload) });
         } catch (e) {
           // 409 means this id already holds an API key. Converting it discards
           // that key, so ask once here rather than after the vendor round trip.
           if (e.status !== 409 || !confirm(e.message + '\n\nConvert it anyway?')) throw e;
           oauthOverwrite = true;
-          data = await api('/oauth/start', { method: 'POST', body: JSON.stringify({ ...payload, overwrite: true }) });
+          data = await api(route, { method: 'POST', body: JSON.stringify({ ...payload, overwrite: true }) });
         }
         oauthState = data.state;
+
+        if (vendor?.supports_device_code) {
+          const url = data.verification_uri_complete || data.verification_uri;
+          const dlink = $('o-authz-url');
+          dlink.href = url;
+          dlink.textContent = url;
+          $('o-device-code').textContent = data.user_code;
+          $('o-authz-step2').classList.remove('hidden');
+          oauthStatus('Authorization started. Approve it in the browser.', false);
+          pollDeviceIn(data.interval_ms || 5000);
+          return;
+        }
+
         const link = $('o-authz-url');
         link.href = data.authorize_url;
         link.textContent = data.authorize_url;
@@ -943,7 +1039,7 @@
         return `<tr>
           <td><strong>${esc(p.name)}</strong>${p.account ? ' · ' + esc(p.account) : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)} · ${esc(vendor ? vendor.label : p.vendor)}</span></td>
           <td style="font-size:0.75rem">${esc(expiry)} ${badge}</td>
-          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}<br><button type="button" class="linkish" data-o-models="${esc(p.id)}">Edit models</button></td>
+          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}<br><button type="button" class="linkish" data-o-sync="${esc(p.id)}">Sync from vendor</button> · <button type="button" class="linkish" data-o-models="${esc(p.id)}">Edit</button></td>
           <td style="white-space:nowrap">
             <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-refresh="${esc(p.id)}">Refresh</button>
             <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-del="${esc(p.id)}">Disconnect</button>
@@ -959,6 +1055,22 @@
             alert(e.message);
           }
           await refreshOAuth();
+        };
+      });
+      tb.querySelectorAll('[data-o-sync]').forEach((btn) => {
+        btn.onclick = async () => {
+          const label = btn.textContent;
+          btn.textContent = 'Syncing…';
+          try {
+            const r = await api('/oauth/' + btn.dataset.oSync + '/models/sync', { method: 'POST' });
+            // A vendor with no list to publish is not an error, just a no-op.
+            oauthStatus(r.status === 'unchanged' ? r.message : 'Fetched ' + r.models.length + ' models from the vendor.', false);
+          } catch (e) {
+            btn.textContent = label;
+            oauthStatus(e.message, true);
+            return;
+          }
+          await Promise.all([refreshOAuth(), refreshProviders()]);
         };
       });
       tb.querySelectorAll('[data-o-models]').forEach((btn) => {
