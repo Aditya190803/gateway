@@ -11,7 +11,7 @@ Copy the `database_id` from the output into `wrangler.toml` under `[[d1_database
 ## 2. Apply migrations
 
 ```bash
-npx wrangler d1 migrations apply ai-gateway-db --local   # dev (0001 schema + 0002 RPM buckets)
+npx wrangler d1 migrations apply ai-gateway-db --local   # dev
 npx wrangler d1 migrations apply ai-gateway-db           # production
 ```
 
@@ -19,6 +19,12 @@ Migrations:
 
 - `0001_initial.sql` — providers, users, api_keys, usage_logs
 - `0002_rate_limit_buckets.sql` — sliding-window RPM counters
+- `0003_roles_invites.sql` — user roles and invite codes
+- `0004_provider_oauth.sql` — subscription (OAuth) providers
+
+**Migrate before you deploy, not after.** The proxy's provider lookup reads
+columns added in `0004` on every request, so deploying this code against an
+older database fails all `/v1/*` traffic until the migration lands.
 
 ## 3. Secrets
 
@@ -59,3 +65,4 @@ Admin passwords are stored with **bcrypt**; older PBKDF2 hashes are upgraded aut
 | Admin UI | `GET /admin/dashboard` |
 | Health | `GET /health` — `{ status, managed_proxy, db }` |
 | Admin API | `POST /admin/login`, `POST /admin/logout`, `GET /admin/provider-presets`, `GET /admin/providers`, `POST /admin/providers`, `DELETE /admin/providers/:id`, `GET/POST/DELETE /admin/api-keys`, `GET /admin/usage`, `POST /admin/setup`, `GET /admin/setup/status` |
+| Subscriptions | `GET /admin/oauth/vendors`, `GET /admin/oauth/providers`, `POST /admin/oauth/start`, `POST /admin/oauth/complete`, `POST /admin/oauth/import`, `POST /admin/oauth/:id/models`, `POST /admin/oauth/:id/refresh` — see [OAUTH_PROVIDERS.md](OAUTH_PROVIDERS.md) |

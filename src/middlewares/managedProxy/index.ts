@@ -9,6 +9,7 @@ import {
   matchProviderWithDefaults,
   parseModelsJson,
 } from '../../managed/modelRouting';
+import { vendorServesPath } from '../../managed/oauth';
 import {
   hasLegacyPortkeyAuth,
   isManagedUserApiKey,
@@ -161,16 +162,23 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   // Owner-only providers (subscription seats) are visible only to keys owned by
   // the account that connected them, so routing never picks one for someone else.
   const providerRows = await env.DB.prepare(
-    `SELECT id, models FROM providers
+    `SELECT id, models, auth_type, oauth_vendor FROM providers
       WHERE is_active = 1
         AND (owner_only = 0 OR owner_user_id = ?)`
   )
     .bind(keyRow.user_id)
-    .all<{ id: string; models: string }>();
+    .all<{
+      id: string;
+      models: string;
+      auth_type: string | null;
+      oauth_vendor: string | null;
+    }>();
 
   const providerModels = (providerRows.results ?? []).map((r) => ({
     id: r.id,
     models: parseModelsJson(r.models),
+    authType: r.auth_type,
+    vendor: r.oauth_vendor,
   }));
 
   c.set(MANAGED_API_KEY, keyRow);
@@ -193,7 +201,16 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     return c.json(list);
   }
 
-  const providerId = matchProviderWithDefaults(model!, providerModels);
+  // A subscription backend may expose only part of the vendor's API surface.
+  // Filtering before the match means an unsupported path falls through to a
+  // metered provider for the same model instead of routing into a 404 upstream.
+  // The models listing above intentionally skips this filter: those models are
+  // still real, they just are not reachable on every path.
+  const routableProviders = providerModels.filter(
+    (p) => p.authType !== 'oauth' || vendorServesPath(p.vendor, path)
+  );
+
+  const providerId = matchProviderWithDefaults(model!, routableProviders);
   if (!providerId) {
     return c.json(
       {

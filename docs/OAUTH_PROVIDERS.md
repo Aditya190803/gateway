@@ -12,30 +12,34 @@ One of the two vendors actively blocks it.
 
 ## Feasibility
 
-| Vendor | Adapter id | Status | Blocker |
+| Vendor | Adapter id | Status | Notes |
 |---|---|---|---|
-| ChatGPT Plus/Pro (Codex) | `openai-codex` | Works, with caveats | Callback is a fixed `localhost:1455`, so credentials must be imported rather than authorized in-gateway. Responses API only. |
-| Claude Pro/Max (Claude Code) | `anthropic-claude-code` | **Likely rejected upstream** | Anthropic enforces client identity server-side. |
+| ChatGPT Plus/Pro (Codex) | `openai-codex` | Registered, with caveats | Callback is a fixed `localhost:1455`, so credentials must be imported rather than authorized in-gateway. Responses API only. |
+| Claude Pro/Max (Claude Code) | `anthropic-claude-code` | **Not registered — disabled** | Impersonates Claude Code's client identity; see below. |
 
-### Anthropic: read this first
+### Anthropic: disabled on purpose
 
-Anthropic does not run an OAuth program for third-party clients. The
-`client_id` the adapter uses belongs to Claude Code itself, and there is no way
-to register your own. Beyond the terms question, Anthropic now enforces this at
-the API: consumer-plan OAuth credentials used outside Claude Code and claude.ai
-are rejected with
+The adapter file (`src/managed/oauth/anthropic.ts`) exists but is **not
+registered** in `src/managed/oauth/index.ts`, so it is unreachable from the API
+and the dashboard.
+
+Anthropic runs no OAuth program for third-party clients. The `client_id` the
+adapter uses belongs to Claude Code itself, and there is no way to register your
+own. Anthropic enforces this at the API: consumer-plan OAuth credentials used
+outside Claude Code and claude.ai are rejected with
 
 > This credential is only authorized for use with Claude Code and cannot be
 > used for other API requests.
 
 The adapter reproduces Claude Code's client headers exactly (`anthropic-beta:
 oauth-2025-04-20,claude-code-20250219`, `x-app: cli`, the `claude-cli`
-user-agent) because that is what the check keys off, but **assume this will
-fail**, and assume the behaviour can change without notice. None of these
-endpoints are a public API.
+user-agent) — those headers exist for no reason other than to satisfy that
+check. That makes it both a Consumer Terms violation and an evasion of a vendor
+control, which is why it ships disabled rather than merely documented as risky.
 
-If you want Anthropic models through this gateway reliably, use an API key from
-console.anthropic.com with the normal `api_key` provider type.
+For Anthropic models, use an API key from console.anthropic.com with the normal
+`api_key` provider type. That path is supported, metered, and does not depend on
+undocumented endpoints.
 
 ### OpenAI: what "works" means
 
@@ -78,6 +82,10 @@ configured for model" instead.
 
 Existing API-key providers are unaffected: the column defaults to `0`.
 
+The admin who completes a flow becomes the owner, and `/complete` rejects a
+`state` started by a different admin — otherwise the seat could be attached to
+an account that never authorized it.
+
 ### Concurrent refresh
 
 Both vendors rotate refresh tokens. If two in-flight requests both refresh and
@@ -89,7 +97,10 @@ invalidated, and the *next* refresh fails. Writes are therefore guarded on
 
 ## Setup
 
-Apply the migration:
+> **Apply the migration before deploying this code.** The proxy's provider
+> lookup filters on `owner_only` / `owner_user_id` on every request, so code
+> running against a pre-0004 database fails **all** `/v1/*` traffic, not just
+> subscription routing. Migrate first, then deploy.
 
 ```bash
 npm run db:migrate:local   # or db:migrate for remote
@@ -128,37 +139,22 @@ curl -X POST https://<gateway>/admin/oauth/import \
 The imported access token is marked stale on purpose, so the first request
 refreshes it and the gateway learns the real lifetime from the response.
 
-### Connect Claude (expected to fail upstream — see above)
+### Overwriting an existing provider
 
-Anthropic redirects to a console page that displays a code, so this one can be
-completed against a hosted gateway.
+Connecting a subscription under a `provider_id` that already holds an API key
+discards that key — the encrypted secret is not recoverable afterwards. Both
+`/start` and `/import` refuse with **409** in that case:
 
-```bash
-# 1. Start the flow; open authorize_url in a browser.
-curl -X POST https://<gateway>/admin/oauth/start \
-  -H 'content-type: application/json' -b cookie.txt \
-  -d '{"vendor":"anthropic-claude-code","provider_id":"claude-sub"}'
-
-# 2. Paste back the code the console shows (the "code#state" form is accepted).
-curl -X POST https://<gateway>/admin/oauth/complete \
-  -H 'content-type: application/json' -b cookie.txt \
-  -d '{"state":"<state from step 1>","code":"<code#state>"}'
+```
+Provider "openai" already exists with an API key. Connecting a subscription
+here permanently discards that key. Pass overwrite: true to convert it, or
+choose a different provider id.
 ```
 
-An existing Claude Code login can be imported instead:
-
-```bash
-curl -X POST https://<gateway>/admin/oauth/import \
-  -H 'content-type: application/json' -b cookie.txt \
-  -d "$(jq -n --argjson creds "$(cat ~/.claude/.credentials.json)" '{
-        vendor: "anthropic-claude-code",
-        provider_id: "claude-sub",
-        credentials: $creds
-      }')"
-```
-
-On macOS the credentials live in the Keychain item `Claude Code-credentials`
-rather than in a file.
+Add `"overwrite": true` to convert deliberately. `/start` checks before sending
+you to the vendor, so a mistyped id costs a corrected form field rather than a
+wasted authorization; when you start with `overwrite`, pass it to `/complete`
+as well. The dashboard asks for confirmation and handles both calls for you.
 
 ### Inspect and refresh
 
@@ -181,11 +177,12 @@ provider row is authoritative and is edited directly:
 ```bash
 curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/models \
   -H 'content-type: application/json' -b cookie.txt \
-  -d '{"models":["gpt-5-codex","gpt-5"]}'
+  -d '{"models":["gpt-5-codex"]}'
 ```
 
 An empty list routes nothing to the account. In the dashboard this is
-**Subscriptions → Edit models**.
+**Subscriptions → Edit models**. Entries are matched as prefixes, so keep them
+specific enough not to swallow traffic meant for a metered provider.
 
 ### Disconnect
 
@@ -210,9 +207,16 @@ curl https://<gateway>/v1/responses \
 ```
 
 **Codex is Responses-API only.** `https://chatgpt.com/backend-api/codex` serves
-`/responses`; it does not serve `/chat/completions`. Point clients at
-`/v1/responses`, or keep an API-key OpenAI provider configured alongside for
-chat-completions traffic.
+`/responses`; it does not serve `/chat/completions`. The adapter declares
+`supportedPaths: ['/v1/responses']`, and routing drops OAuth providers that do
+not serve the request path *before* matching a model — so a
+`/v1/chat/completions` call falls through to an API-key OpenAI provider if you
+have one, and otherwise reports "no active provider configured for model"
+rather than failing against an upstream that was never going to answer.
+
+Keep the seeded model list narrow for the same reason. Model matching is by
+prefix, so a bare `gpt-5` entry captures every `gpt-5*` request the owner makes.
+The adapter seeds only `gpt-5-codex`.
 
 ---
 
@@ -221,8 +225,14 @@ chat-completions traffic.
 Implement `OAuthAdapter` (`src/managed/oauth/types.ts`) and register it in
 `src/managed/oauth/index.ts`. The interface covers the authorize URL, the code
 exchange, the refresh, and `decorate()` — which returns the base URL, extra
-headers, and where the credential goes. Nothing else in the request path is
-vendor-aware. Removing a vendor is a one-line deletion from the registry.
+headers, and where the credential goes. Set `supportedPaths` when the backend
+serves less than the vendor's full API, and keep `defaultModels` specific
+(they are prefixes). Nothing else in the request path is vendor-aware.
+Registration and removal are both one line.
+
+Do not add a vendor by borrowing another client's `client_id` and reproducing
+its headers to get past a server-side client check. That is what got the
+Anthropic adapter disabled.
 
 Vendors deliberately **not** implemented, and why:
 

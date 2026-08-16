@@ -89,6 +89,27 @@ export interface OAuthAdapter {
 
   /** Models to seed the provider row with, so routing works immediately. */
   defaultModels: string[];
+
+  /**
+   * Request paths this credential can actually serve, as prefixes. A
+   * subscription backend often exposes only part of the vendor's API surface,
+   * and routing to it for anything else produces a confusing upstream 404.
+   *
+   * Omit to serve every path the gateway handles.
+   */
+  supportedPaths?: string[];
+}
+
+/**
+ * Whether an adapter can serve a request path. Adapters without an explicit
+ * list serve everything, so a vendor that mirrors the full API needs no config.
+ */
+export function adapterServesPath(
+  adapter: OAuthAdapter,
+  path: string,
+): boolean {
+  if (!adapter.supportedPaths?.length) return true;
+  return adapter.supportedPaths.some((p) => path === p || path.startsWith(p));
 }
 
 /** Refresh slightly early: a token that expires mid-flight reads as a 401. */

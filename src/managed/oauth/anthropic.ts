@@ -9,22 +9,23 @@ import type {
 /**
  * Claude Pro/Max subscription login, as performed by the Claude Code CLI.
  *
- * IMPORTANT — read before enabling this adapter:
+ * DISABLED. This adapter is deliberately not registered in ./index.ts, so it is
+ * unreachable from the API and the dashboard. Do not re-register it:
  *
  * 1. Anthropic does not operate an OAuth program for third-party clients. The
  *    client_id below belongs to Claude Code itself; there is no way to register
  *    your own. Using it from another application is a Consumer Terms violation.
  *
- * 2. Anthropic now enforces this server-side. Consumer-plan OAuth credentials
- *    used outside Claude Code / claude.ai are rejected with:
+ * 2. Anthropic enforces this server-side. Consumer-plan OAuth credentials used
+ *    outside Claude Code / claude.ai are rejected with:
  *      "This credential is only authorized for use with Claude Code and cannot
  *       be used for other API requests."
- *    That check is why this adapter reproduces Claude Code's client headers
- *    exactly. Even so, expect requests to fail, and expect the behaviour to
- *    change without notice — none of these endpoints are a public API.
+ *    The client headers below exist purely to satisfy that check, which makes
+ *    this an evasion of a vendor control rather than an integration with one.
  *
- * A metered API key from console.anthropic.com is the supported path and is
- * what the api_key auth_type is for.
+ * Kept only as a worked example of the OAuthAdapter interface. A metered API key
+ * from console.anthropic.com is the supported path and is what api_key is for.
+ * See docs/OAUTH_PROVIDERS.md.
  */
 
 const CLIENT_ID = '9d1c250a-e61b-44d9-88ed-5944d1962f5e';

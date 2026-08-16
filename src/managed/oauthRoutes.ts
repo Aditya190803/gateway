@@ -38,6 +38,37 @@ function describeStatus(row: {
   };
 }
 
+/**
+ * Guard against connecting a subscription over an unrelated provider.
+ *
+ * Writing an OAuth row blanks api_key on conflict, so a mistyped provider_id
+ * would destroy a working API-key provider's only copy of its encrypted secret.
+ * Converting a key-based provider to a subscription is a legitimate thing to
+ * want, so this asks rather than forbids — but it has to be deliberate.
+ */
+async function checkProviderCollision(
+  env: ManagedEnv,
+  providerId: string,
+  overwrite: boolean,
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  if (overwrite || !env.DB) return { ok: true };
+  const existing = await env.DB.prepare(
+    `SELECT auth_type FROM providers WHERE id = ? LIMIT 1`,
+  )
+    .bind(providerId)
+    .first<{ auth_type: string | null }>();
+  if (existing && existing.auth_type !== 'oauth') {
+    return {
+      ok: false,
+      message:
+        `Provider "${providerId}" already exists with an API key. Connecting a ` +
+        `subscription here permanently discards that key. Pass overwrite: true ` +
+        `to convert it, or choose a different provider id.`,
+    };
+  }
+  return { ok: true };
+}
+
 async function storeConnectedAccount(
   env: ManagedEnv,
   args: {
@@ -47,11 +78,25 @@ async function storeConnectedAccount(
     tokens: OAuthTokens;
     models: string[];
     ownerUserId: number;
+    overwrite: boolean;
   },
-): Promise<{ ok: true } | { ok: false; message: string }> {
+): Promise<{ ok: true } | { ok: false; message: string; status: 409 | 503 }> {
   const enc = encryptionKey(env);
   if (!enc)
-    return { ok: false, message: 'PROVIDER_KEY_ENCRYPTION_KEY not set' };
+    return {
+      ok: false,
+      message: 'PROVIDER_KEY_ENCRYPTION_KEY not set',
+      status: 503,
+    };
+
+  const collision = await checkProviderCollision(
+    env,
+    args.providerId,
+    args.overwrite,
+  );
+  if (!collision.ok) {
+    return { ok: false, message: collision.message, status: 409 };
+  }
 
   const encrypted = await encryptProviderKey(JSON.stringify(args.tokens), enc);
   const label =
@@ -113,6 +158,7 @@ export function createOAuthRoutes(
         supports_manual_code: a.supportsManualCode,
         credential_file: a.credentialFileHint ?? null,
         default_models: a.defaultModels,
+        supported_paths: a.supportedPaths ?? null,
       })),
     });
   });
@@ -127,6 +173,7 @@ export function createOAuthRoutes(
       provider_id?: string;
       provider_name?: string;
       redirect_uri?: string;
+      overwrite?: boolean;
     };
     try {
       body = await c.req.json();
@@ -149,9 +196,27 @@ export function createOAuthRoutes(
       );
     }
 
+    // Fail before sending the operator to the vendor, so a mistyped id costs a
+    // corrected form field rather than a completed authorization they cannot use.
+    const collision = await checkProviderCollision(
+      c.env,
+      providerId,
+      body.overwrite === true,
+    );
+    if (!collision.ok) {
+      return c.json({ status: 'failure', message: collision.message }, 409);
+    }
+
     const { verifier, challenge } = await createPkcePair();
     const state = generateState();
     const redirectUri = body.redirect_uri?.trim() ?? '';
+
+    // Abandoned authorizations are never completed and so are never deleted by
+    // the single-use path below. Sweep them here: this is the only route that
+    // creates them, so it is the only place they can accumulate.
+    await c.env.DB.prepare(`DELETE FROM oauth_states WHERE expires_at < ?`)
+      .bind(Date.now())
+      .run();
 
     await c.env.DB.prepare(
       `INSERT INTO oauth_states
@@ -187,7 +252,12 @@ export function createOAuthRoutes(
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
 
-    let body: { state?: string; code?: string; models?: string[] };
+    let body: {
+      state?: string;
+      code?: string;
+      models?: string[];
+      overwrite?: boolean;
+    };
     try {
       body = await c.req.json();
     } catch {
@@ -201,7 +271,7 @@ export function createOAuthRoutes(
     }
 
     const pending = await c.env.DB.prepare(
-      `SELECT state, vendor, provider_id, provider_name, code_verifier, redirect_uri, expires_at
+      `SELECT state, vendor, provider_id, provider_name, code_verifier, redirect_uri, created_by, expires_at
          FROM oauth_states WHERE state = ? LIMIT 1`,
     )
       .bind(body.state)
@@ -212,6 +282,7 @@ export function createOAuthRoutes(
         provider_name: string;
         code_verifier: string;
         redirect_uri: string;
+        created_by: number | null;
         expires_at: number;
       }>();
 
@@ -230,6 +301,20 @@ export function createOAuthRoutes(
       return c.json(
         { status: 'failure', message: 'Authorization attempt expired' },
         400,
+      );
+    }
+    // owner_user_id decides who can route to this subscription, so the account
+    // that gets it must be the one that authorized, not whoever posts the code.
+    if (
+      pending.created_by !== null &&
+      pending.created_by !== auth.user.userId
+    ) {
+      return c.json(
+        {
+          status: 'failure',
+          message: 'This authorization was started by a different admin',
+        },
+        403,
       );
     }
 
@@ -266,9 +351,13 @@ export function createOAuthRoutes(
       tokens,
       models: body.models ?? adapter.defaultModels,
       ownerUserId: auth.user.userId,
+      overwrite: body.overwrite === true,
     });
     if (!stored.ok) {
-      return c.json({ status: 'failure', message: stored.message }, 503);
+      return c.json(
+        { status: 'failure', message: stored.message },
+        stored.status,
+      );
     }
 
     return c.json({ status: 'success', provider_id: pending.provider_id });
@@ -289,6 +378,7 @@ export function createOAuthRoutes(
       provider_name?: string;
       credentials?: unknown;
       models?: string[];
+      overwrite?: boolean;
     };
     try {
       body = await c.req.json();
@@ -351,9 +441,13 @@ export function createOAuthRoutes(
       tokens,
       models: body.models ?? adapter.defaultModels,
       ownerUserId: auth.user.userId,
+      overwrite: body.overwrite === true,
     });
     if (!stored.ok) {
-      return c.json({ status: 'failure', message: stored.message }, 503);
+      return c.json(
+        { status: 'failure', message: stored.message },
+        stored.status,
+      );
     }
 
     return c.json({ status: 'success', provider_id: providerId });
@@ -411,7 +505,10 @@ export function createOAuthRoutes(
       !body.models.every((m) => typeof m === 'string' && m.trim())
     ) {
       return c.json(
-        { status: 'failure', message: 'models must be an array of non-empty strings' },
+        {
+          status: 'failure',
+          message: 'models must be an array of non-empty strings',
+        },
         400,
       );
     }

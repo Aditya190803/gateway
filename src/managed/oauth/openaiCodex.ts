@@ -238,5 +238,11 @@ export const openaiCodexAdapter: OAuthAdapter = {
 
   credentialFileHint: '~/.codex/auth.json (created by `codex login`)',
 
-  defaultModels: ['gpt-5-codex', 'gpt-5', 'o4-mini'],
+  // Deliberately narrow. A bare 'gpt-5' entry here is a prefix, so it would
+  // capture every gpt-5* request the owner makes — including ones meant for a
+  // metered OpenAI key — and send them to a host that only speaks Responses.
+  // Widen this only with model ids this backend genuinely serves.
+  defaultModels: ['gpt-5-codex'],
+
+  supportedPaths: ['/v1/responses'],
 };
