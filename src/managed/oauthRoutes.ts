@@ -1,7 +1,8 @@
 import { Context, Hono } from 'hono';
 import { encryptProviderKey } from './encryption';
 import { parseModelsJson } from './modelRouting';
-import { getAdapter, listAdapters } from './oauth';
+import { getAdapter, listAdapters, vendorRoutable } from './oauth';
+import { clearProviderCooldown } from './providerHealth';
 import { createPkcePair, generateState, parsePastedCode } from './oauth/pkce';
 import {
   forceRefresh,
@@ -60,6 +61,35 @@ function describeStatus(row: {
     account: row.oauth_account_label,
     expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
     expired: !expiresAt || expiresAt <= Date.now(),
+  };
+}
+
+/**
+ * Routing health, for the admin UI.
+ *
+ * Cooldown is reported as an absolute instant rather than "cooling down: yes",
+ * because how much longer is the part an operator acts on — and a row read a
+ * minute later would otherwise be silently wrong.
+ */
+function describeHealth(row: {
+  cooldown_until: number | null;
+  cooldown_reason: string | null;
+  failure_count: number | null;
+  last_failure_at: number | null;
+  last_failure_message: string | null;
+  disabled_reason: string | null;
+}) {
+  const until = row.cooldown_until ?? 0;
+  return {
+    cooling_down: until > Date.now(),
+    cooldown_until: until ? new Date(until).toISOString() : null,
+    cooldown_reason: row.cooldown_reason,
+    failure_count: row.failure_count ?? 0,
+    last_failure_at: row.last_failure_at
+      ? new Date(row.last_failure_at).toISOString()
+      : null,
+    last_failure_message: row.last_failure_message,
+    disabled_reason: row.disabled_reason,
   };
 }
 
@@ -209,6 +239,15 @@ export function createOAuthRoutes(
         default_models: a.defaultModels,
         supported_paths: a.supportedPaths ?? null,
         supports_device_code: Boolean(a.device),
+        // Surfaced so the connect form can say up front that a vendor is
+        // observable but not yet routable, rather than letting someone connect
+        // a seat and discover later that nothing routes to it.
+        routable: a.routable !== false,
+        // Which deployment secrets this vendor still needs, so the connect form
+        // can say so up front rather than failing at the token exchange.
+        missing_secrets: (a.requiredSecrets ?? []).filter(
+          (key) => !(c.env as Record<string, unknown>)[key],
+        ),
       })),
     });
   });
@@ -512,6 +551,7 @@ export function createOAuthRoutes(
       status: 'success',
       state,
       authorize_url: adapter.buildAuthorizeUrl({
+        vendorEnv: c.env,
         redirectUri,
         state,
         codeChallenge: challenge,
@@ -630,6 +670,7 @@ export function createOAuthRoutes(
     let tokens: OAuthTokens;
     try {
       tokens = await adapter.exchangeCode({
+        vendorEnv: c.env,
         code: pasted.code,
         codeVerifier: pending.code_verifier,
         redirectUri: pending.redirect_uri,
@@ -775,7 +816,9 @@ export function createOAuthRoutes(
     if (!db.ok) return db.response;
     const rows = await c.env.DB.prepare(
       `SELECT id, name, models, oauth_vendor, oauth_expires_at, oauth_account_label,
-              owner_only, owner_user_id, is_active
+              owner_only, owner_user_id, is_active, weight,
+              cooldown_until, cooldown_reason, failure_count,
+              last_failure_at, last_failure_message, disabled_reason
          FROM providers WHERE auth_type = 'oauth' ORDER BY id`,
     ).all<{
       id: string;
@@ -787,6 +830,13 @@ export function createOAuthRoutes(
       owner_only: number;
       owner_user_id: number | null;
       is_active: number;
+      weight: number | null;
+      cooldown_until: number | null;
+      cooldown_reason: string | null;
+      failure_count: number | null;
+      last_failure_at: number | null;
+      last_failure_message: string | null;
+      disabled_reason: string | null;
     }>();
 
     return c.json({
@@ -797,7 +847,12 @@ export function createOAuthRoutes(
         is_active: r.is_active,
         owner_only: r.owner_only,
         owner_user_id: r.owner_user_id,
+        weight: r.weight ?? 1,
+        // Whether traffic can reach this vendor at all, so the UI can say so
+        // rather than leaving the operator to wonder why nothing routes.
+        routable: vendorRoutable(r.oauth_vendor),
         ...describeStatus(r),
+        ...describeHealth(r),
       })),
     });
   });
@@ -919,6 +974,252 @@ export function createOAuthRoutes(
       .bind(JSON.stringify(models), id)
       .run();
     return c.json({ status: 'success', models });
+  });
+
+  /**
+   * The seat's own usage limits, read live from the vendor.
+   *
+   * Distinct from /admin/usage, which reports what this gateway spent. This is
+   * what the subscription has left, so an operator can see a seat approaching
+   * its ceiling before requests start failing.
+   *
+   * Not cached: the windows move continuously and the whole point is a current
+   * reading. The dashboard fetches once per visit and refreshes on demand.
+   */
+  app.get('/:id/usage', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
+
+    const resolved = await resolveOAuthCredential(c.env, c.req.param('id'));
+    if (!resolved.ok) {
+      const err = resolved.error;
+      return c.json(
+        {
+          status: 'failure',
+          message:
+            err.kind === 'refresh_failed'
+              ? err.message
+              : 'Not a connected OAuth provider',
+        },
+        err.kind === 'not_oauth' ? 404 : 502,
+      );
+    }
+
+    const { adapter, tokens } = resolved.value;
+    if (!adapter.fetchQuota) {
+      return c.json(
+        {
+          status: 'unsupported',
+          message: `${adapter.label} publishes no usage endpoint.`,
+        },
+        200,
+      );
+    }
+
+    try {
+      // A vendor that changed or withdrew this endpoint must read as "limits
+      // unavailable for this seat", not as a broken subscriptions page.
+      const quota = await adapter.fetchQuota(tokens);
+      return c.json({ status: 'success', ...quota });
+    } catch (e) {
+      return c.json(
+        {
+          status: 'failure',
+          message: e instanceof Error ? e.message : 'Usage lookup failed',
+        },
+        502,
+      );
+    }
+  });
+
+  /**
+   * Recorded history for this seat's windows, newest last.
+   *
+   * The live `/usage` read is a single instant. This is what the scheduled
+   * sampler has stored, which is what makes "was it already at 80% yesterday"
+   * answerable — and what the dashboard draws as a trend beside each meter.
+   */
+  app.get('/:id/history', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
+
+    const days = Math.min(
+      Math.max(parseInt(c.req.query('days') ?? '7', 10) || 7, 1),
+      90,
+    );
+    const since = Date.now() - days * 86400_000;
+    const rows = await c.env.DB.prepare(
+      `SELECT window_id, used_percent, taken_at
+         FROM quota_snapshots
+        WHERE provider_id = ? AND taken_at >= ?
+        ORDER BY taken_at ASC`,
+    )
+      .bind(c.req.param('id'), since)
+      .all<{
+        window_id: string;
+        used_percent: number | null;
+        taken_at: number;
+      }>();
+
+    // Grouped by window so the caller does not have to: every consumer wants
+    // one series per meter, never the flat list.
+    const series: Record<string, { t: number; p: number | null }[]> = {};
+    for (const row of rows.results ?? []) {
+      (series[row.window_id] ??= []).push({
+        t: row.taken_at,
+        p: row.used_percent,
+      });
+    }
+    return c.json({ days, series });
+  });
+
+  /**
+   * Pull a vendor-side lever the usage snapshot advertised.
+   *
+   * Kept separate from the usage read because it spends something: a Codex
+   * reset credit is consumed whether or not it was needed, so it only ever
+   * happens on an explicit request, never as a reaction to a 429.
+   */
+  app.post('/:id/quota-action', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
+
+    let body: { action?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ status: 'failure', message: 'Invalid JSON' }, 400);
+    }
+    const actionId = typeof body.action === 'string' ? body.action.trim() : '';
+    if (!actionId) {
+      return c.json({ status: 'failure', message: 'action is required' }, 400);
+    }
+
+    const resolved = await resolveOAuthCredential(c.env, c.req.param('id'));
+    if (!resolved.ok) {
+      const err = resolved.error;
+      return c.json(
+        {
+          status: 'failure',
+          message:
+            err.kind === 'refresh_failed'
+              ? err.message
+              : 'Not a connected OAuth provider',
+        },
+        err.kind === 'not_oauth' ? 404 : 502,
+      );
+    }
+
+    const { adapter, tokens } = resolved.value;
+    if (!adapter.runQuotaAction) {
+      return c.json(
+        {
+          status: 'failure',
+          message: `${adapter.label} offers no quota actions.`,
+        },
+        400,
+      );
+    }
+
+    try {
+      await adapter.runQuotaAction(tokens, actionId);
+    } catch (e) {
+      return c.json(
+        {
+          status: 'failure',
+          message: e instanceof Error ? e.message : 'Action failed',
+        },
+        502,
+      );
+    }
+    return c.json({ status: 'success' });
+  });
+
+  /**
+   * Put a provider back in service: clears the cooldown, the failure run, and
+   * an automatic deactivation.
+   *
+   * Cooldown is a guess about the future, and an operator who has just fixed
+   * the underlying problem knows better than the guess does.
+   */
+  app.post('/:id/reinstate', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
+
+    const id = c.req.param('id');
+    const row = await getOAuthProviderRow(c.env, id);
+    // getOAuthProviderRow only returns active rows, so an auto-disabled
+    // provider is not found there — check existence directly instead.
+    const exists =
+      row ??
+      (await c.env.DB.prepare(
+        `SELECT id FROM providers WHERE id = ? AND auth_type = 'oauth' LIMIT 1`,
+      )
+        .bind(id)
+        .first<{ id: string }>());
+    if (!exists) {
+      return c.json(
+        { status: 'failure', message: 'Not an OAuth provider' },
+        404,
+      );
+    }
+
+    await clearProviderCooldown(c.env.DB, id);
+    await c.env.DB.prepare(`UPDATE providers SET is_active = 1 WHERE id = ?`)
+      .bind(id)
+      .run();
+    return c.json({ status: 'success' });
+  });
+
+  /**
+   * Relative share of traffic among providers serving the same model.
+   *
+   * Only meaningful once a user has more than one credential for a model; with
+   * a single provider it changes nothing.
+   */
+  app.post('/:id/weight', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const db = requireDb(c);
+    if (!db.ok) return db.response;
+
+    let body: { weight?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ status: 'failure', message: 'Invalid JSON' }, 400);
+    }
+    const weight = Number(body.weight);
+    if (!Number.isInteger(weight) || weight < 1 || weight > 100) {
+      return c.json(
+        {
+          status: 'failure',
+          message: 'weight must be an integer from 1 to 100',
+        },
+        400,
+      );
+    }
+
+    const result = await c.env.DB.prepare(
+      `UPDATE providers SET weight = ? WHERE id = ? AND auth_type = 'oauth'`,
+    )
+      .bind(weight, c.req.param('id'))
+      .run();
+    if ((result.meta?.changes ?? 0) === 0) {
+      return c.json(
+        { status: 'failure', message: 'Not an OAuth provider' },
+        404,
+      );
+    }
+    return c.json({ status: 'success', weight });
   });
 
   /** Force a refresh, so the operator can verify a connection without traffic. */

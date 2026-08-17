@@ -1,6 +1,14 @@
 import { asRecord, parseExpiry, pickString } from './credentialFiles';
 import { fetchModelIds } from './modelList';
 import { decodeJwtPayload } from './pkce';
+import {
+  getJson,
+  num,
+  resetMs,
+  str,
+  type QuotaSnapshot,
+  type QuotaWindow,
+} from './quota';
 import type {
   AuthorizeRequest,
   DeviceAuthorization,
@@ -92,6 +100,37 @@ async function discover(): Promise<Required<Discovery>> {
     });
   }
   return discoveryCache;
+}
+
+/** Billing lives on the same CLI proxy host as chat. */
+const BILLING_URL = `${CLI_CHAT_BASE_URL}/billing`;
+
+type BillingPayload = {
+  config?: {
+    currentPeriod?: { start?: unknown; end?: unknown; type?: unknown } | null;
+    current_period?: { start?: unknown; end?: unknown; type?: unknown } | null;
+    creditUsagePercent?: unknown;
+    credit_usage_percent?: unknown;
+    productUsage?: {
+      product?: unknown;
+      usagePercent?: unknown;
+      usage_percent?: unknown;
+    }[];
+    product_usage?: {
+      product?: unknown;
+      usagePercent?: unknown;
+      usage_percent?: unknown;
+    }[];
+    monthlyLimit?: unknown;
+    monthly_limit?: unknown;
+    used?: unknown;
+  } | null;
+};
+
+/** Money arrives either as a bare number of cents or wrapped as `{ val }`. */
+function cents(value: unknown): number | null {
+  const wrapped = asRecord(value);
+  return wrapped ? num(wrapped.val) : num(value);
 }
 
 /** xAI's token endpoints are form-encoded, per the OAuth specs. */
@@ -276,6 +315,93 @@ export const xaiGrokAdapter: OAuthAdapter = {
       ...CLIENT_HEADERS,
       authorization: `Bearer ${tokens.access_token}`,
     });
+  },
+
+  /**
+   * The seat's billing window, which is where xAI reports subscription usage.
+   *
+   * Two shapes come off the same endpoint: `?format=credits` answers with a
+   * credit-consumption percentage for the current period, and the bare form
+   * answers with a monthly spend cap in cents. Which one a seat gets depends on
+   * its plan, so both are asked for and whichever answers is used.
+   */
+  async fetchQuota(tokens: OAuthTokens): Promise<QuotaSnapshot> {
+    const headers: Record<string, string> = {
+      ...CLIENT_HEADERS,
+      authorization: `Bearer ${tokens.access_token}`,
+    };
+    if (tokens.account_id) headers['x-userid'] = tokens.account_id;
+
+    const [credits, monthly] = await Promise.allSettled([
+      getJson<BillingPayload>(`${BILLING_URL}?format=credits`, headers),
+      getJson<BillingPayload>(BILLING_URL, headers),
+    ]);
+    if (credits.status === 'rejected' && monthly.status === 'rejected') {
+      throw credits.reason;
+    }
+
+    const windows: QuotaWindow[] = [];
+    const notes: string[] = [];
+
+    const creditConfig =
+      credits.status === 'fulfilled' ? credits.value?.config ?? null : null;
+    if (creditConfig) {
+      const period =
+        creditConfig.currentPeriod ?? creditConfig.current_period ?? null;
+      const start = resetMs(period?.start);
+      const end = resetMs(period?.end);
+      const percent = num(
+        creditConfig.creditUsagePercent ?? creditConfig.credit_usage_percent,
+      );
+      if (percent !== null) {
+        windows.push({
+          id: 'credits',
+          label: str(period?.type)
+            ? `Credits · ${str(period?.type)}`
+            : 'Credits',
+          usedPercent: percent,
+          resetsAt: end,
+          // Take the length from the period itself so a non-standard cycle is
+          // not mislabelled as weekly.
+          periodHours:
+            start !== null && end !== null && end > start
+              ? (end - start) / 3600000
+              : null,
+        });
+      }
+      for (const item of creditConfig.productUsage ??
+        creditConfig.product_usage ??
+        []) {
+        const usedPercent = num(item?.usagePercent ?? item?.usage_percent);
+        const product = str(item?.product);
+        if (usedPercent === null || !product) continue;
+        windows.push({
+          id: `product-${product.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+          label: product,
+          usedPercent,
+          resetsAt: end,
+          periodHours: null,
+        });
+      }
+    }
+
+    // A spend cap is not rate-limited capacity coming back, so it reads as a
+    // note rather than as a window that "resets".
+    const spendConfig =
+      monthly.status === 'fulfilled' ? monthly.value?.config ?? null : null;
+    if (spendConfig) {
+      const limit = cents(
+        spendConfig.monthlyLimit ?? spendConfig.monthly_limit,
+      );
+      const used = cents(spendConfig.used);
+      if (limit !== null && limit > 0 && used !== null) {
+        notes.push(
+          `Monthly spend: $${(used / 100).toFixed(2)} of $${(limit / 100).toFixed(2)}`,
+        );
+      }
+    }
+
+    return { plan: null, windows, notes, fetchedAt: Date.now() };
   },
 
   decorate(): UpstreamCall {

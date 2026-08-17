@@ -72,6 +72,12 @@ export interface Options {
   azureModelName?: string;
   /** Workers AI specific */
   workersAiAccountId?: string;
+  /**
+   * Antigravity specific: the Cloud project the seat is onboarded to, which the
+   * Code Assist backend requires in the request envelope. Resolved once when the
+   * subscription is connected and carried in the provider config from there.
+   */
+  antigravityProjectId?: string;
   /** The parameter to set custom base url */
   customHost?: string;
   /** The parameter to set list of headers to be forwarded as-is to the provider */

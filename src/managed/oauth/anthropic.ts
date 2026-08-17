@@ -1,5 +1,14 @@
 import { asRecord, parseExpiry, pickString } from './credentialFiles';
 import { fetchModelIds } from './modelList';
+import {
+  getJson,
+  num,
+  resetMs,
+  str,
+  WEEK,
+  type QuotaSnapshot,
+  type QuotaWindow,
+} from './quota';
 import type {
   AuthorizeRequest,
   ExchangeRequest,
@@ -112,6 +121,85 @@ async function postToken(
   }
 }
 
+const USAGE_URL = 'https://api.anthropic.com/api/oauth/usage';
+const PROFILE_URL = 'https://api.anthropic.com/api/oauth/profile';
+
+/**
+ * The named windows in the usage payload, in the order Claude Code shows them.
+ *
+ * The payload states no period, so it comes from the key: `five_hour` is the
+ * rolling session window and every other named key is a 7-day one.
+ */
+const USAGE_WINDOWS: { key: string; label: string; hours: number }[] = [
+  { key: 'five_hour', label: 'Session (5h)', hours: 5 },
+  { key: 'seven_day', label: 'Weekly · all models', hours: WEEK },
+  { key: 'seven_day_oauth_apps', label: 'Weekly · OAuth apps', hours: WEEK },
+  { key: 'seven_day_opus', label: 'Weekly · Opus', hours: WEEK },
+  { key: 'seven_day_sonnet', label: 'Weekly · Sonnet', hours: WEEK },
+  { key: 'seven_day_cowork', label: 'Weekly · Cowork', hours: WEEK },
+];
+
+type UsageWindow = { utilization?: unknown; resets_at?: unknown };
+type UsageLimit = {
+  kind?: unknown;
+  percent?: unknown;
+  resets_at?: unknown;
+  is_active?: unknown;
+  scope?: { model?: { display_name?: unknown } | null } | null;
+};
+type UsagePayload = Record<string, unknown> & {
+  limits?: UsageLimit[];
+  extra_usage?: {
+    is_enabled?: unknown;
+    monthly_limit?: unknown;
+    used_credits?: unknown;
+  } | null;
+};
+
+/**
+ * Per-model weekly caps, which Anthropic reports in a `limits` array rather than
+ * as named keys. Newer models appear only here, so a seat's real ceiling would
+ * be invisible without reading it.
+ */
+function scopedWindows(payload: UsagePayload): QuotaWindow[] {
+  if (!Array.isArray(payload.limits)) return [];
+  return payload.limits
+    .filter((l) => str(l?.kind)?.toLowerCase() === 'weekly_scoped')
+    .map((l, i): QuotaWindow | null => {
+      const percent = num(l.percent);
+      if (percent === null) return null;
+      const model = str(l.scope?.model?.display_name) ?? `model ${i + 1}`;
+      return {
+        id: `weekly-scoped-${model.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        label: `Weekly · ${model}`,
+        usedPercent: percent,
+        resetsAt: resetMs(l.resets_at),
+        periodHours: WEEK,
+      };
+    })
+    .filter((w): w is QuotaWindow => w !== null);
+}
+
+/** has_claude_max/has_claude_pro on the profile is how the CLI names the tier. */
+function planFromProfile(profile: unknown): string | null {
+  const root = asRecord(profile);
+  if (!root) return null;
+  const account = asRecord(root.account);
+  if (account?.has_claude_max === true) return 'Max';
+  if (account?.has_claude_pro === true) return 'Pro';
+  const org = asRecord(root.organization);
+  if (
+    str(org?.organization_type)?.toLowerCase() === 'claude_team' &&
+    str(org?.subscription_status)?.toLowerCase() === 'active'
+  ) {
+    return 'Team';
+  }
+  if (account?.has_claude_max === false && account?.has_claude_pro === false) {
+    return 'Free';
+  }
+  return null;
+}
+
 export const anthropicClaudeCodeAdapter: OAuthAdapter = {
   id: 'anthropic-claude-code',
   label: 'Claude Pro/Max (Claude Code login)',
@@ -167,6 +255,62 @@ export const anthropicClaudeCodeAdapter: OAuthAdapter = {
       ...CLIENT_HEADERS,
       authorization: `Bearer ${tokens.access_token}`,
     });
+  },
+
+  /**
+   * The windows Claude Code's `/usage` view shows, plus the plan tier.
+   *
+   * The profile call is best-effort and runs alongside: knowing the tier is
+   * nice, but a seat whose limits load is still worth showing without it.
+   */
+  async fetchQuota(tokens: OAuthTokens): Promise<QuotaSnapshot> {
+    const headers = {
+      ...CLIENT_HEADERS,
+      authorization: `Bearer ${tokens.access_token}`,
+    };
+    const [usageResult, profileResult] = await Promise.allSettled([
+      getJson<UsagePayload>(USAGE_URL, headers),
+      getJson<unknown>(PROFILE_URL, headers),
+    ]);
+    if (usageResult.status === 'rejected') throw usageResult.reason;
+    const payload = usageResult.value;
+
+    const scoped = scopedWindows(payload);
+    const windows: QuotaWindow[] = [];
+    for (const { key, label, hours } of USAGE_WINDOWS) {
+      const w = payload[key] as UsageWindow | undefined;
+      const usedPercent = num(w?.utilization);
+      if (usedPercent === null) continue;
+      windows.push({
+        id: key.replace(/_/g, '-'),
+        label,
+        usedPercent,
+        resetsAt: resetMs(w?.resets_at),
+        periodHours: hours,
+      });
+    }
+    windows.push(...scoped);
+
+    const notes: string[] = [];
+    const extra = payload.extra_usage;
+    if (extra?.is_enabled === true) {
+      // Anthropic reports extra usage in cents.
+      const used = (num(extra.used_credits) ?? 0) / 100;
+      const limit = (num(extra.monthly_limit) ?? 0) / 100;
+      notes.push(
+        `Extra usage: $${used.toFixed(2)} of $${limit.toFixed(2)} this month`,
+      );
+    }
+
+    return {
+      plan:
+        profileResult.status === 'fulfilled'
+          ? planFromProfile(profileResult.value)
+          : null,
+      windows,
+      notes,
+      fetchedAt: Date.now(),
+    };
   },
 
   decorate(): UpstreamCall {

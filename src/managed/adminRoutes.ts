@@ -23,6 +23,7 @@ import {
   prefixesFromModelIds,
 } from './fetchModels';
 import { parseModelsJson } from './modelRouting';
+import { clearProviderCooldown } from './providerHealth';
 import { generateInviteCode, hashInviteCode, invitePrefix } from './invites';
 import { createOAuthRoutes } from './oauthRoutes';
 import type { ManagedEnv } from './types';
@@ -309,14 +310,127 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     const auth = await requirePlatformAdmin(c);
     if (!auth.ok) return auth.response;
     const rows = await c.env.DB.prepare(
-      `SELECT id, name, models, is_active, created_at, auth_type FROM providers ORDER BY id`
+      `SELECT p.id, p.name, p.models, p.is_active, p.created_at, p.auth_type, p.weight,
+              p.cooldown_until, p.cooldown_reason, p.failure_count,
+              p.last_failure_message, p.disabled_reason,
+              p.owner_only, p.owner_user_id, u.email AS owner_email
+         FROM providers p
+         LEFT JOIN users u ON u.id = p.owner_user_id
+        ORDER BY p.id`
     ).all();
-    const results = (rows.results ?? []).map((r) => ({
-      ...r,
-      models: parseModelsJson(String((r as { models: string }).models)),
-      has_api_key: (r as { auth_type?: string }).auth_type !== 'oauth',
-    }));
+    const now = Date.now();
+    const results = (rows.results ?? []).map((r) => {
+      const row = r as Record<string, unknown>;
+      const until = (row.cooldown_until as number | null) ?? 0;
+      return {
+        ...r,
+        models: parseModelsJson(String(row.models)),
+        has_api_key: row.auth_type !== 'oauth',
+        weight: (row.weight as number | null) ?? 1,
+        cooling_down: until > now,
+        cooldown_until: until ? new Date(until).toISOString() : null,
+      };
+    });
     return c.json({ providers: results });
+  });
+
+  /**
+   * Restrict an API-key provider to one user, or share it with everyone.
+   *
+   * Subscription seats set this at connect time and are always owner-only; this
+   * covers the metered providers, which are shared by default. On a gateway
+   * with more than one person on it, "shared" means everybody's traffic bills
+   * to whoever's key is in the row — worth being able to change, and worth
+   * leaving alone unless someone asks, which is why existing rows are untouched.
+   */
+  admin.post('/providers/:id/owner', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    let body: { user_id?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ status: 'failure', message: 'Invalid JSON' }, 400);
+    }
+
+    const id = c.req.param('id');
+    const row = await c.env.DB.prepare(
+      `SELECT auth_type FROM providers WHERE id = ? LIMIT 1`
+    )
+      .bind(id)
+      .first<{ auth_type: string | null }>();
+    if (!row) {
+      return c.json({ status: 'failure', message: 'Provider not found' }, 404);
+    }
+    if (row.auth_type === 'oauth') {
+      return c.json(
+        {
+          status: 'failure',
+          message:
+            'A subscription seat belongs to the account that connected it and cannot be reassigned. Disconnect it and reconnect as the other user.',
+        },
+        400
+      );
+    }
+
+    // null means "shared with everyone", which is the pre-existing behaviour
+    // and stays expressible.
+    if (body.user_id === null || body.user_id === undefined) {
+      await c.env.DB.prepare(
+        `UPDATE providers SET owner_only = 0, owner_user_id = NULL WHERE id = ?`
+      )
+        .bind(id)
+        .run();
+      return c.json({ status: 'success', owner_user_id: null });
+    }
+
+    const userId = Number(body.user_id);
+    if (!Number.isInteger(userId)) {
+      return c.json(
+        { status: 'failure', message: 'user_id must be an integer or null' },
+        400
+      );
+    }
+    const user = await c.env.DB.prepare(
+      `SELECT id FROM users WHERE id = ? AND is_active = 1 LIMIT 1`
+    )
+      .bind(userId)
+      .first<{ id: number }>();
+    if (!user) {
+      return c.json({ status: 'failure', message: 'No such active user' }, 400);
+    }
+
+    await c.env.DB.prepare(
+      `UPDATE providers SET owner_only = 1, owner_user_id = ? WHERE id = ?`
+    )
+      .bind(userId, id)
+      .run();
+    return c.json({ status: 'success', owner_user_id: userId });
+  });
+
+  /**
+   * Clear a provider's cooldown and re-enable it if the gateway disabled it.
+   *
+   * The OAuth panel has its own copy of this at /oauth/:id/reinstate; this one
+   * covers API-key providers, which take the same failure path.
+   */
+  admin.post('/providers/:id/reinstate', async (c) => {
+    const auth = await requirePlatformAdmin(c);
+    if (!auth.ok) return auth.response;
+    const id = c.req.param('id');
+    const existing = await c.env.DB.prepare(
+      `SELECT id FROM providers WHERE id = ? LIMIT 1`
+    )
+      .bind(id)
+      .first<{ id: string }>();
+    if (!existing) {
+      return c.json({ status: 'failure', message: 'Provider not found' }, 404);
+    }
+    await clearProviderCooldown(c.env.DB, id);
+    await c.env.DB.prepare(`UPDATE providers SET is_active = 1 WHERE id = ?`)
+      .bind(id)
+      .run();
+    return c.json({ status: 'success' });
   });
 
   admin.post('/providers', async (c) => {
@@ -364,8 +478,14 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
          oauth_expires_at = NULL,
          oauth_account_label = NULL,
          oauth_version = providers.oauth_version + 1,
-         owner_only = 0,
-         owner_user_id = NULL`
+         -- Converting a subscription seat to an API key drops the seat's
+         -- owner-only restriction, which belonged to the seat. Re-saving the
+         -- key on a provider that was already key-based must not, or an
+         -- assignment made in the UI would silently revert on the next edit.
+         owner_only = CASE WHEN providers.auth_type = 'oauth' THEN 0
+                           ELSE providers.owner_only END,
+         owner_user_id = CASE WHEN providers.auth_type = 'oauth' THEN NULL
+                              ELSE providers.owner_user_id END`
     )
       .bind(id, name, encrypted, modelsJson, isActive)
       .run();
@@ -458,9 +578,19 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
     if (!auth.ok) return auth.response;
     const where = auth.user.role === 'admin' ? '' : 'WHERE k.user_id = ?';
     const binds = auth.user.role === 'admin' ? [] : [auth.user.userId];
+    // Consumption comes back with the key so the owner can see their own
+    // position against their own limits — a limit nobody can see is a limit
+    // people only discover by being cut off.
     const rows = await c.env.DB.prepare(
       `SELECT k.id, k.key_prefix, k.label, k.is_active, k.rpm_limit, k.monthly_token_limit, k.created_at,
-              u.email as user_email, k.user_id
+              u.email as user_email, k.user_id,
+              (SELECT COALESCE(SUM(l.prompt_tokens + l.completion_tokens), 0)
+                 FROM usage_logs l
+                WHERE l.api_key_id = k.id
+                  AND l.created_at >= datetime('now', 'start of month')) AS month_tokens,
+              (SELECT COUNT(*) FROM usage_logs l
+                WHERE l.api_key_id = k.id
+                  AND l.created_at >= datetime('now', '-1 minute')) AS last_minute_requests
        FROM api_keys k
        JOIN users u ON u.id = k.user_id
        ${where}
@@ -469,6 +599,45 @@ export function createAdminApp(): Hono<{ Bindings: ManagedEnv }> {
       .bind(...binds)
       .all();
     return c.json({ api_keys: rows.results ?? [] });
+  });
+
+  /**
+   * The request log, newest first.
+   *
+   * Separate from /usage, which aggregates. This is the per-request view that
+   * answers "what happened to that one call", including the failures the
+   * aggregates cannot show.
+   */
+  admin.get('/logs', async (c) => {
+    const auth = await requireSession(c);
+    if (!auth.ok) return auth.response;
+    const limit = Math.min(
+      Math.max(parseInt(c.req.query('limit') ?? '50', 10) || 50, 1),
+      200
+    );
+    const f = userFilter(auth.user);
+    // status_code is NULL for rows written before the column existed, which
+    // were only ever written on success — hence NULL counting as 2xx here.
+    const onlyErrors = c.req.query('status') === 'error';
+    const errorFilter = onlyErrors
+      ? ' AND u.status_code IS NOT NULL AND u.status_code >= 400'
+      : '';
+
+    const rows = await c.env.DB.prepare(
+      `SELECT u.id, u.created_at, u.model, u.provider, u.status_code,
+              u.error_message, u.duration_ms,
+              u.prompt_tokens, u.completion_tokens,
+              k.key_prefix, k.label${auth.user.role === 'admin' ? ', usr.email as user_email' : ''}
+         FROM usage_logs u
+         JOIN api_keys k ON k.id = u.api_key_id
+         JOIN users usr ON usr.id = k.user_id
+        WHERE 1 = 1${f.sql}${errorFilter}
+        ORDER BY u.id DESC
+        LIMIT ?`
+    )
+      .bind(...f.binds, limit)
+      .all();
+    return c.json({ logs: rows.results ?? [] });
   });
 
   admin.post('/api-keys', async (c) => {

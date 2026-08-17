@@ -1,6 +1,15 @@
 import { asRecord, parseExpiry, pickString } from './credentialFiles';
 import { fetchModelIds } from './modelList';
 import { decodeJwtPayload } from './pkce';
+import {
+  getJson,
+  num,
+  resetFromOffset,
+  resetMs,
+  str,
+  type QuotaSnapshot,
+  type QuotaWindow,
+} from './quota';
 import type {
   AuthorizeRequest,
   ExchangeRequest,
@@ -44,6 +53,122 @@ const TOKEN_TIMEOUT_MS = 15000;
  * this has to track a current CLI release to see the current models.
  */
 const CLIENT_VERSION = '0.144.0';
+
+/**
+ * Usage lives on the ChatGPT web backend rather than the Codex one, so it has
+ * its own base and is not reachable through BACKEND_BASE_URL.
+ */
+const USAGE_URL = 'https://chatgpt.com/backend-api/wham/usage';
+
+/**
+ * Spending one of the account's rate-limit reset credits, which clears the
+ * current window early. The vendor sells these; the gateway only redeems one
+ * when an operator explicitly asks.
+ */
+const RESET_CREDIT_URL =
+  'https://chatgpt.com/backend-api/wham/rate-limit-reset-credits/consume';
+export const CODEX_RESET_CREDIT_ACTION = 'reset-credit';
+
+/** A rolling window as the wham/usage payload reports it. */
+type CodexWindow = {
+  used_percent?: unknown;
+  usedPercent?: unknown;
+  limit_window_seconds?: unknown;
+  limitWindowSeconds?: unknown;
+  reset_after_seconds?: unknown;
+  resetAfterSeconds?: unknown;
+  reset_at?: unknown;
+  resetAt?: unknown;
+};
+
+type CodexRateLimit = {
+  allowed?: unknown;
+  limit_reached?: unknown;
+  limitReached?: unknown;
+  primary_window?: CodexWindow | null;
+  primaryWindow?: CodexWindow | null;
+  secondary_window?: CodexWindow | null;
+  secondaryWindow?: CodexWindow | null;
+};
+
+type CodexUsagePayload = {
+  plan_type?: unknown;
+  planType?: unknown;
+  rate_limit?: CodexRateLimit | null;
+  rateLimit?: CodexRateLimit | null;
+  code_review_rate_limit?: CodexRateLimit | null;
+  codeReviewRateLimit?: CodexRateLimit | null;
+  rate_limit_reset_credits?: {
+    available_count?: unknown;
+    availableCount?: unknown;
+  } | null;
+  rateLimitResetCredits?: {
+    available_count?: unknown;
+    availableCount?: unknown;
+  } | null;
+};
+
+/**
+ * Name a window by the period the payload states, not by its position.
+ *
+ * `primary`/`secondary` are not stable labels — a Team seat's secondary window
+ * is monthly where an individual's is weekly — so the duration is the only
+ * honest source for what to call it.
+ */
+function windowLabel(seconds: number | null): {
+  label: string;
+  hours: number | null;
+} {
+  if (seconds === null) return { label: 'Rolling window', hours: null };
+  const hours = seconds / 3600;
+  if (hours <= 24) return { label: `Rolling ${Math.round(hours)}h`, hours };
+  const days = Math.round(hours / 24);
+  if (days >= 28 && days <= 31) return { label: 'Monthly', hours };
+  if (days === 7) return { label: 'Weekly', hours };
+  return { label: `Rolling ${days}d`, hours };
+}
+
+/**
+ * Both windows of one rate-limit block.
+ *
+ * A window with no percentage still matters when the limit is already reached:
+ * the vendor stops reporting utilization at that point, and showing nothing
+ * would read as "plenty left" on a seat that is actually blocked.
+ */
+function windowsFrom(
+  limit: CodexRateLimit | null | undefined,
+  prefix: string,
+  namePrefix: string,
+): QuotaWindow[] {
+  if (!limit) return [];
+  const blocked =
+    limit.limit_reached === true ||
+    limit.limitReached === true ||
+    limit.allowed === false;
+  const raw = [
+    limit.primary_window ?? limit.primaryWindow,
+    limit.secondary_window ?? limit.secondaryWindow,
+  ];
+
+  return raw
+    .map((w, i): QuotaWindow | null => {
+      if (!w) return null;
+      const seconds = num(w.limit_window_seconds ?? w.limitWindowSeconds);
+      const { label, hours } = windowLabel(seconds);
+      const usedPercent =
+        num(w.used_percent ?? w.usedPercent) ?? (blocked ? 100 : null);
+      return {
+        id: `${prefix}-${i}`,
+        label: namePrefix ? `${namePrefix} · ${label}` : label,
+        usedPercent,
+        resetsAt:
+          resetMs(w.reset_at ?? w.resetAt) ??
+          resetFromOffset(w.reset_after_seconds ?? w.resetAfterSeconds),
+        periodHours: hours,
+      };
+    })
+    .filter((w): w is QuotaWindow => w !== null);
+}
 
 type TokenResponse = {
   access_token?: string;
@@ -219,6 +344,91 @@ export const openaiCodexAdapter: OAuthAdapter = {
       `${BACKEND_BASE_URL}/models?client_version=${CLIENT_VERSION}`,
       headers,
     );
+  },
+
+  /**
+   * The rate-limit windows the Codex CLI prints as `/status`.
+   *
+   * Two blocks are reported separately — ordinary usage and code review — and a
+   * seat can be blocked on one while the other still has capacity, so both are
+   * shown rather than merged.
+   */
+  async fetchQuota(tokens: OAuthTokens): Promise<QuotaSnapshot> {
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${tokens.access_token}`,
+      'user-agent': `codex_cli_rs/${CLIENT_VERSION} (external)`,
+      originator: 'codex_cli_rs',
+    };
+    // Same reason as decorate(): the backend resolves the subscription from it.
+    if (tokens.account_id) headers['chatgpt-account-id'] = tokens.account_id;
+
+    const payload = await getJson<CodexUsagePayload>(USAGE_URL, headers);
+    const windows = [
+      ...windowsFrom(payload.rate_limit ?? payload.rateLimit, 'code', ''),
+      ...windowsFrom(
+        payload.code_review_rate_limit ?? payload.codeReviewRateLimit,
+        'review',
+        'Code review',
+      ),
+    ];
+
+    const notes: string[] = [];
+    const credits =
+      payload.rate_limit_reset_credits ?? payload.rateLimitResetCredits;
+    const available = num(credits?.available_count ?? credits?.availableCount);
+    if (available !== null && available > 0) {
+      notes.push(
+        `${available} rate-limit reset credit${available === 1 ? '' : 's'} available`,
+      );
+    }
+
+    return {
+      plan:
+        str(payload.plan_type ?? payload.planType) ??
+        str(tokens.extra?.plan_type) ??
+        null,
+      windows,
+      notes,
+      fetchedAt: Date.now(),
+      action: {
+        id: CODEX_RESET_CREDIT_ACTION,
+        label: 'Use a reset credit',
+        available: (available ?? 0) > 0,
+      },
+    };
+  },
+
+  /**
+   * Redeem one reset credit, clearing the current rate-limit window.
+   *
+   * The credit is spent whether or not the window needed clearing, so this is
+   * only ever called from an explicit operator action, never automatically on a
+   * 429. The redeem id makes the call idempotent at the vendor.
+   */
+  async runQuotaAction(tokens: OAuthTokens, actionId: string): Promise<void> {
+    if (actionId !== CODEX_RESET_CREDIT_ACTION) {
+      throw new Error(`Unknown action for ChatGPT: ${actionId}`);
+    }
+    const headers: Record<string, string> = {
+      authorization: `Bearer ${tokens.access_token}`,
+      'content-type': 'application/json',
+      'user-agent': `codex_cli_rs/${CLIENT_VERSION} (external)`,
+      originator: 'codex_cli_rs',
+    };
+    if (tokens.account_id) headers['chatgpt-account-id'] = tokens.account_id;
+
+    const res = await fetch(RESET_CREDIT_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ redeem_request_id: crypto.randomUUID() }),
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(
+        `Reset credit could not be redeemed (${res.status}): ${text.slice(0, 200)}`,
+      );
+    }
   },
 
   decorate(tokens: OAuthTokens): UpstreamCall {

@@ -1,3 +1,11 @@
 # Copy to .dev.vars for local wrangler dev (never commit .dev.vars)
 PROVIDER_KEY_ENCRYPTION_KEY=change-me-min-16-chars-local-dev-only
 ADMIN_JWT_SECRET=change-me-jwt-secret-min-16-chars-local
+# Optional. Where quota alerts are posted when a subscription window crosses
+# 75/90/100%. Slack and Discord webhook URLs work unchanged.
+# ALERT_WEBHOOK_URL=
+
+# Optional. Antigravity's own Google client credentials, read out of its desktop
+# client. Needed only to connect or refresh an Antigravity subscription.
+# ANTIGRAVITY_CLIENT_ID=
+# ANTIGRAVITY_CLIENT_SECRET=

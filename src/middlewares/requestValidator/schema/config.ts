@@ -94,6 +94,8 @@ export const configSchema: any = z
     // Google Vertex AI specific
     vertex_project_id: z.string().optional(),
     vertex_region: z.string().optional(),
+    // Antigravity specific: the Code Assist project the seat is onboarded to.
+    antigravity_project_id: z.string().optional(),
     after_request_hooks: z
       .array(z.object({}).catchall(z.any())) // Allows any object structure
       .optional(),

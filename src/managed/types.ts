@@ -3,6 +3,21 @@ export type ManagedEnv = {
   PROVIDER_KEY_ENCRYPTION_KEY?: string;
   ADMIN_JWT_SECRET?: string;
   ENVIRONMENT?: string;
+  /**
+   * Where quota alerts are posted. Slack and Discord webhook URLs both work as
+   * they are; anything else receives the same JSON. Unset means no alerts,
+   * which is the default — sampling and history still run.
+   */
+  ALERT_WEBHOOK_URL?: string;
+  /** Days of request log kept by the scheduled prune. Defaults to 30. */
+  LOG_RETENTION_DAYS?: string;
+  /**
+   * Antigravity's Google client credentials, read out of its desktop client.
+   * Not committed: they belong to Google, not to this project. Without them the
+   * Antigravity adapter refuses to authorize or refresh, and says so.
+   */
+  ANTIGRAVITY_CLIENT_ID?: string;
+  ANTIGRAVITY_CLIENT_SECRET?: string;
 };
 
 export type ApiKeyRecord = {

@@ -14,6 +14,13 @@ type = "Text"
 globs = ["**/*.html"]
 fallthrough = true
 
+# Samples each connected subscription's vendor quota, alerts on threshold
+# crossings, and prunes the request log. Hourly: the windows these track are
+# five hours at their shortest, so finer sampling would add vendor round trips
+# without telling anyone anything new.
+[triggers]
+crons = ["0 * * * *"]
+
 [vars]
 ENVIRONMENT = 'dev'
 CUSTOM_HEADERS_TO_IGNORE = []
