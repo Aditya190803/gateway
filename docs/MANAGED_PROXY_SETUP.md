@@ -21,10 +21,12 @@ Migrations:
 - `0002_rate_limit_buckets.sql` — sliding-window RPM counters
 - `0003_roles_invites.sql` — user roles and invite codes
 - `0004_provider_oauth.sql` — subscription (OAuth) providers
+- `0005_provider_health_and_request_log.sql` — cooldown, weights, request outcomes
+- `0006_quota_snapshots_and_alerts.sql` — quota history and alert state
 
 **Migrate before you deploy, not after.** The proxy's provider lookup reads
-columns added in `0004` on every request, so deploying this code against an
-older database fails all `/v1/*` traffic until the migration lands.
+columns added in `0004` and `0005` on every request, so deploying this code
+against an older database fails all `/v1/*` traffic until the migrations land.
 
 ## 3. Secrets
 
@@ -34,6 +36,26 @@ npx wrangler secret put ADMIN_JWT_SECRET                # 32+ char random string
 ```
 
 For local dev, copy `.dev.vars.example` to `.dev.vars` and set strong random values.
+
+### Optional
+
+| Variable | Effect |
+|---|---|
+| `ALERT_WEBHOOK_URL` | Where quota alerts are posted when a subscription window crosses 75/90/100%. Slack and Discord webhook URLs work as they are. Unset means no alerts — sampling and history still run. |
+| `LOG_RETENTION_DAYS` | Days of request log kept by the hourly prune. Defaults to 30, capped at 365. |
+| `ANTIGRAVITY_CLIENT_ID` / `ANTIGRAVITY_CLIENT_SECRET` | Antigravity's own Google client credentials, read out of its desktop client. Required only to connect or refresh an Antigravity seat; every other vendor authorizes without a secret. Set these with `wrangler secret put`. |
+
+Both are plain vars rather than secrets, but `ALERT_WEBHOOK_URL` is a
+capability URL — treat it as a secret if your webhook can post anywhere that
+matters.
+
+### Scheduled job
+
+`wrangler.toml` declares an hourly Cron Trigger. It samples each connected
+subscription's vendor quota into `quota_snapshots`, raises threshold alerts, and
+prunes the request log and history. Nothing else depends on it: remove the
+`[triggers]` block and the gateway serves traffic exactly as before, minus the
+history, the alerts and the pruning.
 
 ## 4. Run
 

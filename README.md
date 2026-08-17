@@ -6,10 +6,16 @@ Self-hosted LLM proxy on **Cloudflare Workers** with admin UI, encrypted provide
 
 - **Admin dashboard** (`/admin/dashboard`) — providers, subscription accounts, user keys, usage analytics
 - **User API** — OpenAI-compatible `/v1/*` with `Authorization: Bearer sk-…`
-- **Subscription providers** — serve requests from a ChatGPT Plus/Pro seat via OAuth, owner-only ([docs](docs/OAUTH_PROVIDERS.md))
+- **Subscription providers** — serve requests from a ChatGPT, Claude, Grok, Antigravity or Kimi seat via OAuth, owner-only ([docs](docs/OAUTH_PROVIDERS.md))
+- **Vendor usage limits** — each seat's own rolling quota windows, read live, shown as meters with a trend, and alerted on at 75/90/100%
 - **Auto-routing** — `gpt-*` → OpenAI, `claude-*` → Anthropic, etc.
-- **Rate limits** — RPM (sliding window) and monthly token caps per key
+- **Cooldown and failover** — a seat that hits its vendor ceiling is skipped, and the request is retried on another credential
+- **Weighted rotation** — several seats can serve the same model and split the traffic
+- **Rate limits** — RPM (sliding window) and monthly token caps per key, with consumption visible to the key's owner
+- **Request log** — every call including failures and streamed token counts, with the upstream error text
 - **Security** — AES-256-GCM provider keys, SHA-256 user key hashes, bcrypt admin passwords
+
+What is missing and what it would take: [docs/ROADMAP.md](docs/ROADMAP.md)
 
 ## Quick start
 
