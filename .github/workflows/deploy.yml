@@ -23,8 +23,13 @@ jobs:
 
       # Bindings (D1, vars) live on the top-level environment in wrangler.toml,
       # so deploy with --env="" rather than a named environment.
+      # Pinned to wrangler 4 for D1 only: the repo's wrangler 3 devDependency
+      # fails every D1 API call against this account with code 7403, and this
+      # step must succeed — the proxy reads columns added in 0005 on every
+      # request, so a deploy that outran its migrations breaks all /v1 traffic.
+      # The deploy step below stays on the pinned devDependency version.
       - name: Apply D1 migrations
-        run: npx wrangler d1 migrations apply ai-gateway-db --remote --env=""
+        run: npx --yes wrangler@4 d1 migrations apply ai-gateway-db --remote --env=""
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
