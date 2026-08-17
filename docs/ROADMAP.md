@@ -211,3 +211,9 @@ usually is not needed is the wrong trade.
   updating.
 - The Cron Trigger is declared in `wrangler.toml`. Without `ALERT_WEBHOOK_URL`
   it still samples, stores history and prunes — it just tells no one.
+- Deploys target the **top-level** wrangler environment, selected by *omitting*
+  `--env`. `--env=""` does not mean "top-level": Wrangler looks for an
+  environment literally named `""` and exits. `[env.staging]` and
+  `[env.production]` redefine neither the D1 binding nor the vars, and Wrangler
+  does not inherit bindings into named environments, so deploying with one would
+  ship a worker with no `DB`.
