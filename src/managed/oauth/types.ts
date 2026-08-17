@@ -7,6 +7,8 @@
  * token is presented upstream (which host, which headers).
  */
 
+import type { QuotaSnapshot } from './quota';
+
 /** Credential set for one connected account. Persisted encrypted. */
 export type OAuthTokens = {
   access_token: string;
@@ -34,12 +36,38 @@ export type UpstreamCall = {
    * their API-key auth uses, so this is explicit rather than assumed.
    */
   auth: { header: string; scheme?: string };
+  /**
+   * Extra provider-config keys, merged into the gateway config the request
+   * carries (snake_case, as the config schema names them).
+   *
+   * For account facts the provider transform needs in the *body* rather than in
+   * a header — Antigravity's Code Assist project id is the case this exists
+   * for. A header cannot serve: the value has to reach the parameter transform,
+   * which only sees params and provider options.
+   */
+  configOverrides?: Record<string, string>;
+};
+
+/**
+ * Vendor client credentials supplied by the deployment rather than compiled in.
+ *
+ * Most adapters here need none: their vendors issue public clients that
+ * authorize with PKCE and no secret. Google is the exception — it issues
+ * installed applications a client secret, which by definition is not
+ * confidential but is still a credential belonging to somebody else, so it is
+ * configured per deployment instead of living in this repository.
+ */
+export type VendorSecrets = {
+  ANTIGRAVITY_CLIENT_ID?: string;
+  ANTIGRAVITY_CLIENT_SECRET?: string;
 };
 
 export type AuthorizeRequest = {
   redirectUri: string;
   state: string;
   codeChallenge: string;
+  /** Deployment-supplied client credentials, for adapters that need them. */
+  vendorEnv?: VendorSecrets;
 };
 
 export type ExchangeRequest = {
@@ -47,6 +75,7 @@ export type ExchangeRequest = {
   codeVerifier: string;
   redirectUri: string;
   state?: string;
+  vendorEnv?: VendorSecrets;
 };
 
 /**
@@ -98,6 +127,12 @@ export interface OAuthAdapter {
    */
   gatewayProvider: string;
 
+  /**
+   * Deployment-supplied secrets this adapter cannot work without, so the admin
+   * UI can say which are missing before anyone tries to connect a seat.
+   */
+  requiredSecrets?: (keyof VendorSecrets)[];
+
   /** Callback path this adapter expects, relative to the gateway origin. */
   callbackPath: string;
 
@@ -116,7 +151,10 @@ export interface OAuthAdapter {
 
   buildAuthorizeUrl(req: AuthorizeRequest): string;
   exchangeCode(req: ExchangeRequest): Promise<OAuthTokens>;
-  refresh(tokens: OAuthTokens): Promise<OAuthTokens>;
+  refresh(
+    tokens: OAuthTokens,
+    vendorEnv?: VendorSecrets,
+  ): Promise<OAuthTokens>;
 
   /** Describes how to address an upstream call carrying these tokens. */
   decorate(tokens: OAuthTokens): UpstreamCall;
@@ -145,6 +183,36 @@ export interface OAuthAdapter {
    * a listing at all.
    */
   listModels?(tokens: OAuthTokens): Promise<string[]>;
+
+  /**
+   * Read the seat's own usage limits from the vendor — the rolling windows its
+   * client displays, not this gateway's request log.
+   *
+   * Optional because it depends on an endpoint the vendor operates for its own
+   * client and may withdraw. Callers report a throw as an error against that one
+   * seat; an adapter without it simply has no limits to show.
+   */
+  fetchQuota?(tokens: OAuthTokens): Promise<QuotaSnapshot>;
+
+  /**
+   * Consume a vendor-side allowance that lifts a limit, when the vendor sells
+   * one. Codex grants "reset credits" that clear a rate-limit window early.
+   *
+   * Named by the `action.id` the snapshot advertised, so the route stays one
+   * endpoint rather than one per vendor trick.
+   */
+  runQuotaAction?(tokens: OAuthTokens, actionId: string): Promise<void>;
+
+  /**
+   * Whether inference can be routed to this vendor. Defaults to true.
+   *
+   * A seat is worth connecting before the gateway can serve it: credentials,
+   * refresh and usage limits are vendor-agnostic, but the request and response
+   * transforms are not. False means "connected and observable, not routable",
+   * and routing leaves it out entirely rather than sending traffic to an
+   * endpoint that would reject the body shape.
+   */
+  routable?: boolean;
 
   /**
    * Request paths this credential can actually serve, as prefixes. A

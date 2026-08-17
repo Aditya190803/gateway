@@ -6,17 +6,31 @@ import {
   resolveProviderCredential,
 } from '../../managed/injectProvider';
 import {
-  matchProviderWithDefaults,
+  matchProvidersWithDefaults,
   parseModelsJson,
 } from '../../managed/modelRouting';
-import { vendorServesPath } from '../../managed/oauth';
+import { vendorRoutable, vendorServesPath } from '../../managed/oauth';
 import {
   hasLegacyPortkeyAuth,
   isManagedUserApiKey,
 } from '../../managed/legacyAuth';
+import { getFailoverState } from '../../managed/failover';
+import {
+  classifyStatus,
+  isRetryable,
+  recordProviderFailure,
+  recordProviderSuccess,
+  selectCandidate,
+  type Candidate,
+} from '../../managed/providerHealth';
 import { checkRateLimits, recordRequestForRpm } from '../../managed/rateLimit';
 import type { ApiKeyRecord, ManagedEnv } from '../../managed/types';
-import { extractUsageFromJson, logRequest } from '../../managed/usageLog';
+import {
+  collectStreamUsage,
+  extractErrorMessage,
+  extractUsageFromJson,
+  logRequest,
+} from '../../managed/usageLog';
 
 const MANAGED_API_KEY = 'managedApiKey';
 const MANAGED_PROVIDER = 'managedProvider';
@@ -70,7 +84,10 @@ function defaultModelForPath(path: string): string | null {
 }
 
 /** Anthropic /v1/messages uses model in JSON body (same as extractModelFromRequest). */
-function routeModelForMessages(path: string, model: string | null): string | null {
+function routeModelForMessages(
+  path: string,
+  model: string | null
+): string | null {
   if (path === '/v1/messages' || path.startsWith('/v1/messages/')) {
     return model;
   }
@@ -162,7 +179,8 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   // Owner-only providers (subscription seats) are visible only to keys owned by
   // the account that connected them, so routing never picks one for someone else.
   const providerRows = await env.DB.prepare(
-    `SELECT id, models, auth_type, oauth_vendor FROM providers
+    `SELECT id, models, auth_type, oauth_vendor, weight, cooldown_until
+       FROM providers
       WHERE is_active = 1
         AND (owner_only = 0 OR owner_user_id = ?)`
   )
@@ -172,6 +190,8 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
       models: string;
       auth_type: string | null;
       oauth_vendor: string | null;
+      weight: number | null;
+      cooldown_until: number | null;
     }>();
 
   const providerModels = (providerRows.results ?? []).map((r) => ({
@@ -179,12 +199,21 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     models: parseModelsJson(r.models),
     authType: r.auth_type,
     vendor: r.oauth_vendor,
+    weight: r.weight ?? 1,
+    cooldownUntil: r.cooldown_until,
   }));
+
+  // A vendor the gateway can hold credentials for but cannot yet serve traffic
+  // to is excluded everywhere routing is decided, including the models listing:
+  // advertising a model that no request can reach is worse than omitting it.
+  const servable = providerModels.filter(
+    (p) => p.authType !== 'oauth' || vendorRoutable(p.vendor)
+  );
 
   c.set(MANAGED_API_KEY, keyRow);
 
   if (isModelsList) {
-    const ids = providerModels.map((p) => p.id);
+    const ids = servable.map((p) => p.id);
     if (!ids.length) {
       return c.json(
         {
@@ -206,22 +235,40 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   // metered provider for the same model instead of routing into a 404 upstream.
   // The models listing above intentionally skips this filter: those models are
   // still real, they just are not reachable on every path.
-  const routableProviders = providerModels.filter(
+  const routableProviders = servable.filter(
     (p) => p.authType !== 'oauth' || vendorServesPath(p.vendor, path)
   );
 
-  const providerId = matchProviderWithDefaults(model!, routableProviders);
+  const matched = matchProvidersWithDefaults(model!, routableProviders);
+  const byId = new Map(routableProviders.map((p) => [p.id, p]));
+
+  // A retry must not land on the credential that just failed, so providers
+  // already attempted for this request are removed before anything is chosen.
+  const failover = getFailoverState(env);
+  const attempted = new Set(failover?.attempted ?? []);
+  const available = matched.filter((id) => !attempted.has(id));
+
+  const candidates: Candidate[] = available.map((id) => ({
+    id,
+    weight: byId.get(id)?.weight ?? 1,
+    cooldownUntil: byId.get(id)?.cooldownUntil ?? null,
+  }));
+  const providerId = selectCandidate(candidates);
+
   if (!providerId) {
+    // Distinguish "you have nothing for this model" from "everything we had
+    // for it has already been tried", because they need different actions.
+    const message = matched.length
+      ? `All providers for model ${model} failed this request`
+      : `No active provider configured for model: ${model}`;
     return c.json(
-      {
-        error: {
-          message: `No active provider configured for model: ${model}`,
-          type: 'invalid_request_error',
-        },
-      },
-      400
+      { error: { message, type: 'invalid_request_error' } },
+      matched.length ? 502 : 400
     );
   }
+  failover?.attempted.push(providerId);
+  /** Whether a different credential could still take this request. */
+  const hasAlternative = available.length > 1;
 
   const credential = await resolveProviderCredential(env, providerId);
   if (!credential.ok) {
@@ -240,6 +287,21 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
       err.kind === 'oauth'
         ? `Provider ${providerId} is not usable right now; its subscription login needs to be reconnected.`
         : 'Provider not available or decryption failed';
+
+    // A credential the vendor will not renew is the case auto-disable exists
+    // for. A local decryption failure is not: it means this deployment's
+    // encryption key is wrong, which would otherwise deactivate every provider
+    // at once over a problem that is fixed with an environment variable.
+    c.executionCtx.waitUntil(
+      recordProviderFailure(
+        env.DB,
+        providerId,
+        err.kind === 'oauth' ? 'auth' : 'server',
+        err.kind === 'oauth' ? err.message : 'Credential could not be decrypted'
+      )
+    );
+    if (hasAlternative && failover) failover.retry = true;
+
     return c.json(
       {
         error: {
@@ -260,31 +322,87 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     c.req.raw.body
   );
 
+  const startedAt = Date.now();
   await next();
+  const durationMs = Date.now() - startedAt;
 
   const apiKeyRec = c.get(MANAGED_API_KEY) as ApiKeyRecord | undefined;
   const providerUsed = c.get(MANAGED_PROVIDER) as string | undefined;
   const modelForLog = model;
   if (!apiKeyRec || !providerUsed || !modelForLog) return;
 
-  const logAfterResponse = async () => {
+  const res = c.res;
+  const failureKind = res ? classifyStatus(res.status) : null;
+
+  // Ask for a retry before returning, while the wrapper is still waiting on
+  // this response. Everything else about the failure is recorded afterwards.
+  if (failureKind && isRetryable(failureKind) && hasAlternative && failover) {
+    failover.retry = true;
+  }
+
+  const ok = res ? res.status >= 200 && res.status < 300 : false;
+  const contentType = res?.headers.get('content-type') ?? '';
+
+  /**
+   * Streamed responses carry their token counts in the frames themselves, and
+   * a stream can only be read once. Tee it here — before the response leaves —
+   * so the client gets one copy and the meter gets the other; `res.clone()`
+   * cannot serve, because the clone would compete for the same source.
+   */
+  let meteredStream: ReadableStream<Uint8Array> | null = null;
+  if (ok && res?.body && contentType.includes('text/event-stream')) {
+    const [toClient, toMeter] = res.body.tee();
+    c.res = new Response(toClient, res);
+    meteredStream = toMeter;
+  }
+
+  const recordAfterResponse = async () => {
     try {
-      const res = c.res;
-      if (!res || res.status < 200 || res.status >= 300) return;
+      if (!res) return;
+
+      // Every attempt that reached a provider counts against the key's rate
+      // limit. Charging only for successes would let a failing client retry
+      // without limit, which is the case the limit exists for.
       await recordRequestForRpm(env.DB, apiKeyRec.id);
+
       let usage: { prompt: number; completion: number } | undefined;
-      const ct = res.headers.get('content-type') ?? '';
-      if (ct.includes('application/json')) {
-        const cloned = res.clone();
-        const json = (await cloned.json()) as Record<string, unknown>;
+      let errorMessage: string | null = null;
+      const ct = contentType;
+
+      if (meteredStream) {
+        // Resolves when the upstream stream ends, which is after the client has
+        // its answer. waitUntil keeps the isolate alive for exactly this.
+        usage = await collectStreamUsage(meteredStream);
+      } else if (ok && ct.includes('application/json')) {
+        const json = (await res.clone().json()) as Record<string, unknown>;
         const u = extractUsageFromJson(json);
         usage = { prompt: u.prompt, completion: u.completion };
+      } else if (!ok) {
+        // Error bodies are small and are the whole point of logging a failure.
+        errorMessage = extractErrorMessage(await res.clone().text(), ct);
       }
-      await logRequest(env.DB, apiKeyRec.id, modelForLog, providerUsed, usage);
+
+      await logRequest(env.DB, apiKeyRec.id, modelForLog, providerUsed, usage, {
+        statusCode: res.status,
+        errorMessage,
+        durationMs,
+      });
+
+      if (failureKind) {
+        await recordProviderFailure(
+          env.DB,
+          providerUsed,
+          failureKind,
+          errorMessage || `Upstream returned ${res.status}`,
+          res.headers.get('retry-after')
+        );
+      } else if (ok) {
+        await recordProviderSuccess(env.DB, providerUsed);
+      }
     } catch {
-      /* non-fatal */
+      /* logging and health tracking are never worth failing a request over */
     }
   };
 
-  c.executionCtx.waitUntil(logAfterResponse());
+  c.executionCtx.waitUntil(recordAfterResponse());
 };

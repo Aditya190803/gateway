@@ -49,6 +49,7 @@ export const ANYSCALE: string = 'anyscale';
 export const PALM: string = 'palm';
 export const TOGETHER_AI: string = 'together-ai';
 export const GOOGLE: string = 'google';
+export const GOOGLE_ANTIGRAVITY: string = 'google-antigravity';
 export const GOOGLE_VERTEX_AI: string = 'vertex-ai';
 export const HUGGING_FACE: string = 'huggingface';
 export const PERPLEXITY_AI: string = 'perplexity-ai';

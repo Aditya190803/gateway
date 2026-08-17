@@ -35,3 +35,15 @@ export function vendorServesPath(
   const adapter = getAdapter(vendor);
   return adapter ? adapterServesPath(adapter, path) : true;
 }
+
+/**
+ * Whether traffic can be routed to a stored vendor at all.
+ *
+ * Same fallback reasoning as vendorServesPath: an unregistered vendor stays
+ * routable so the failure names the missing adapter rather than looking like a
+ * routing gap.
+ */
+export function vendorRoutable(vendor: string | null | undefined): boolean {
+  const adapter = getAdapter(vendor);
+  return adapter ? adapter.routable !== false : true;
+}

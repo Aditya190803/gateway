@@ -16,8 +16,12 @@ import { requestValidator } from './middlewares/requestValidator';
 import { hooks } from './middlewares/hooks';
 import { memoryCache } from './middlewares/cache';
 import { managedProxyMiddleware } from './middlewares/managedProxy';
+import { withProviderFailover } from './managed/failover';
+import { runScheduled } from './managed/scheduled';
+import type { ManagedEnv } from './managed/types';
 import { createAdminApp } from './managed/adminRoutes';
 import adminDashboardHtml from './public/admin-dashboard.html';
+import quotaHtml from './public/quota.html';
 
 // Handlers
 import { proxyHandler } from './handlers/proxyHandler';
@@ -116,6 +120,20 @@ const adminApp = createAdminApp();
 app.route('/admin', adminApp);
 app.get('/admin/dashboard', (c) =>
   c.html(adminDashboardHtml, 200, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate',
+  })
+);
+
+/**
+ * Subscription quota, grouped by window length.
+ *
+ * The page itself is public HTML; everything on it comes from the admin API
+ * behind the session cookie, so an unauthenticated visitor sees a prompt to
+ * sign in rather than anyone else's limits.
+ */
+app.get('/quota', (c) =>
+  c.html(quotaHtml, 200, {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store, no-cache, must-revalidate',
   })
@@ -327,5 +345,31 @@ app.get('/v1/:path{(?!realtime).*}', requestValidator, proxyHandler);
 
 app.delete('/v1/*', requestValidator, proxyHandler);
 
-// Export the app
-export default app;
+/**
+ * Export the app behind the failover wrapper, plus the scheduled handler.
+ *
+ * A managed request whose provider fails in a way another credential could
+ * serve is retried against that credential. The retry has to happen outside the
+ * Hono app — a middleware may only call next() once — so this is the outermost
+ * layer, and it passes everything that is not a managed request straight
+ * through. See src/managed/failover.ts.
+ *
+ * `scheduled` samples every connected seat's vendor quota, alerts on threshold
+ * crossings, and prunes the request log. See src/managed/scheduled.ts.
+ */
+export default {
+  fetch: withProviderFailover(app),
+  async scheduled(
+    _event: ScheduledController,
+    env: ManagedEnv,
+    ctx: ExecutionContext
+  ) {
+    ctx.waitUntil(
+      runScheduled(env).then((report) => {
+        // The only place this surfaces is `wrangler tail`, so it goes out as
+        // one line whether or not anything went wrong.
+        logger.info('[managed] scheduled run', JSON.stringify(report));
+      })
+    );
+  },
+};

@@ -318,6 +318,39 @@
       border-radius: 4px 4px 0 0;
       min-height: 4px;
     }
+    /* Vendor-side usage limits, shown under each connected subscription. */
+    /* A seat and its limits are one block, so only the limits row is ruled off. */
+    .seat-row td { border-bottom: none; padding-bottom: 0.4rem; }
+    .limits { padding-top: 0; }
+    .limits-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      font-size: 0.75rem;
+      color: var(--ink-3);
+      margin-bottom: 0.6rem;
+    }
+    .meters { display: grid; gap: 0.55rem; }
+    @media (min-width: 900px) { .meters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem 1.5rem; } }
+    .meter-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      margin-bottom: 0.2rem;
+    }
+    .meter-label span:last-child { font-family: var(--mono); color: var(--ink-3); white-space: nowrap; }
+    .meter-row { display: flex; align-items: center; gap: 0.5rem; }
+    .meter-row .meter-track { flex: 1; }
+    /* Trend from recorded samples: the meter says now, this says how it got here. */
+    .spark { width: 54px; height: 14px; flex: none; opacity: 0.75; }
+    .spark path { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linejoin: round; }
+    .meter-track { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+    .meter-fill { height: 100%; border-radius: 3px; background: var(--ok); }
+    /* Colour is the fast read here: the number is the detail, the bar is the alarm. */
+    .meter-fill.warn { background: var(--accent); }
+    .meter-fill.crit { background: var(--danger); }
     .model-preview {
       max-height: 160px;
       overflow-y: auto;
@@ -388,6 +421,9 @@
       <button type="button" class="nav-btn" data-panel="keys">API keys</button>
       <button type="button" class="nav-btn" data-panel="usage">Usage</button>
       <button type="button" class="nav-btn admin-only" data-panel="users">Users</button>
+      <!-- A page rather than a panel: it reads across every seat at once, which
+           is a different question from managing one of them. -->
+      <a class="nav-btn admin-only" href="/quota" style="text-decoration:none;display:block">Quota</a>
       <div class="spacer"></div>
       <button type="button" class="nav-btn" id="logout-btn">Sign out</button>
     </aside>
@@ -505,6 +541,7 @@
         </div>
         <div class="card">
           <h2 class="page-title" style="font-size:1.1rem">Connected</h2>
+          <p class="muted" style="margin:-0.5rem 0 1rem;font-size:0.8125rem">Limits are read live from each vendor — this is the seat's own quota, not what this gateway spent.</p>
           <table>
             <thead><tr><th>Account</th><th>Token expires</th><th>Models</th><th></th></tr></thead>
             <tbody id="oauth-tbody"></tbody>
@@ -532,7 +569,7 @@
         </div>
         <div class="card">
           <table>
-            <thead><tr><th>Key</th><th>Label</th><th>RPM</th><th>Monthly</th><th></th></tr></thead>
+            <thead><tr><th>Key</th><th>Label</th><th>Requests</th><th>Tokens</th><th></th></tr></thead>
             <tbody id="keys-tbody"></tbody>
           </table>
         </div>
@@ -594,6 +631,23 @@
             <table><thead><tr><th>Key</th><th class="num">Req</th><th class="num">Tok</th></tr></thead><tbody id="usage-by-key"></tbody></table>
           </div>
           <table style="margin-top:1rem"><thead><tr><th>Model</th><th>Provider</th><th class="num">Req</th></tr></thead><tbody id="usage-by-model"></tbody></table>
+        </div>
+        <div class="card">
+          <h2 class="page-title" style="font-size:1.1rem">Recent requests</h2>
+          <p class="muted" style="margin:-0.5rem 0 1rem;font-size:0.8125rem">Every proxied request, failures included. This is where an upstream error is recorded — the totals above cannot show one.</p>
+          <div class="btn-row" style="margin-bottom:1rem">
+            <select id="logs-filter" aria-label="Outcome" style="width:auto;margin:0">
+              <option value="all">All requests</option>
+              <option value="error">Failures only</option>
+            </select>
+            <button type="button" class="btn btn-secondary" id="refresh-logs">Refresh</button>
+          </div>
+          <div style="overflow-x:auto">
+            <table>
+              <thead><tr><th>When</th><th>Model</th><th>Provider</th><th>Outcome</th><th class="num">Tok</th><th class="num">ms</th></tr></thead>
+              <tbody id="logs-tbody"></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </div>
@@ -740,6 +794,18 @@
       }
     };
 
+    // Users, for assigning provider ownership. Loaded once per visit alongside
+    // the Users panel and reused here rather than fetched per row.
+    let knownUsers = [];
+
+    /** Who a metered provider bills to: everyone, or one named account. */
+    function ownerCell(p) {
+      const label = p.owner_only && p.owner_user_id
+        ? esc(p.owner_email || ('user ' + p.owner_user_id))
+        : 'shared';
+      return `<span class="muted" style="font-size:0.7rem">Bills to ${label}</span> · <button type="button" class="linkish" data-owner="${esc(p.id)}">Change</button>`;
+    }
+
     async function refreshProviders() {
       if (currentUser?.role !== 'admin') return;
       const { providers } = await api('/providers');
@@ -750,12 +816,49 @@
       }
       tb.innerHTML = providers.map((p) =>
         `<tr>
-          <td><strong>${esc(p.name)}</strong>${p.auth_type === 'oauth' ? '<span class="badge badge-live">Subscription</span>' : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)}</span></td>
+          <td><strong>${esc(p.name)}</strong>${p.auth_type === 'oauth' ? '<span class="badge badge-live">Subscription</span>' : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)}</span>${healthBadges({ ...p, routable: true })}</td>
           <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}</td>
-          <td>${p.auth_type === 'oauth' ? '<span class="muted" style="font-size:0.75rem">Managed in Subscriptions</span>' : `<button type="button" class="linkish" data-sync="${esc(p.id)}">Sync models</button>`}</td>
-          <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-del="${esc(p.id)}">Remove</button></td>
+          <td>${p.auth_type === 'oauth'
+            ? '<span class="muted" style="font-size:0.75rem">Managed in Subscriptions</span>'
+            : `<button type="button" class="linkish" data-sync="${esc(p.id)}">Sync models</button><br>${ownerCell(p)}`}</td>
+          <td style="white-space:nowrap">${p.cooling_down || !p.is_active ? `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-reinstate="${esc(p.id)}">Reinstate</button>` : ''}
+          <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-del="${esc(p.id)}">Remove</button></td>
         </tr>`
       ).join('');
+      tb.querySelectorAll('[data-owner]').forEach((btn) => {
+        btn.onclick = async () => {
+          const options = knownUsers.map((u) => `${u.id} = ${u.email}`).join('\n');
+          const answer = prompt(
+            'Which account does this provider bill to?\n\nBlank = shared with everyone.\n\n' + options,
+            ''
+          );
+          if (answer === null) return;
+          const trimmed = answer.trim();
+          const userId = trimmed === '' ? null : Number(trimmed);
+          if (userId !== null && !Number.isInteger(userId)) {
+            alert('Enter a user id from the list, or leave blank to share it.');
+            return;
+          }
+          try {
+            await api('/providers/' + btn.dataset.owner + '/owner', {
+              method: 'POST',
+              body: JSON.stringify({ user_id: userId }),
+            });
+          } catch (e) { alert(e.message); return; }
+          await refreshProviders();
+        };
+      });
+      tb.querySelectorAll('[data-reinstate]').forEach((btn) => {
+        btn.onclick = async () => {
+          btn.textContent = '…';
+          try {
+            await api('/providers/' + btn.dataset.reinstate + '/reinstate', { method: 'POST' });
+          } catch (e) {
+            alert(e.message);
+          }
+          await refreshProviders();
+        };
+      });
       tb.querySelectorAll('[data-del]').forEach((btn) => {
         btn.onclick = async () => {
           if (!confirm('Remove ' + btn.dataset.del + '?')) return;
@@ -783,6 +886,21 @@
       });
     }
 
+    /**
+     * A key's consumption against one of its limits.
+     *
+     * Rendered even when no limit is set, because "142k used, no cap" is still
+     * the thing the owner wants to know; the meter only appears when there is a
+     * ceiling for it to be a fraction of.
+     */
+    function limitCell(used, limit) {
+      const u = Number(used) || 0;
+      if (limit == null) return `${fmt(u)} <span class="muted">/ no cap</span>`;
+      const pct = limit > 0 ? Math.min(100, (u / limit) * 100) : 0;
+      return `<div>${fmt(u)} <span class="muted">/ ${fmt(limit)}</span></div>
+        <div class="meter-track" style="margin-top:0.25rem"><div class="meter-fill${meterTone(pct)}" style="width:${pct}%"></div></div>`;
+    }
+
     async function refreshKeys() {
       const { api_keys } = await api('/api-keys');
       const active = api_keys.filter((k) => k.is_active);
@@ -792,7 +910,9 @@
         return;
       }
       tb.innerHTML = active.map((k) =>
-        `<tr><td style="font-family:var(--mono)">${k.key_prefix}…</td><td>${k.label || '—'}${k.user_email && currentUser?.role === 'admin' ? '<br><span class="muted">' + k.user_email + '</span>' : ''}</td><td>${k.rpm_limit ?? '—'}</td><td>${k.monthly_token_limit ?? '—'}</td>
+        `<tr><td style="font-family:var(--mono)">${esc(k.key_prefix)}…</td><td>${esc(k.label) || '—'}${k.user_email && currentUser?.role === 'admin' ? '<br><span class="muted">' + esc(k.user_email) + '</span>' : ''}</td>
+        <td style="min-width:7rem">${limitCell(k.last_minute_requests, k.rpm_limit)}<div class="muted" style="font-size:0.7rem">last minute</div></td>
+        <td style="min-width:7rem">${limitCell(k.month_tokens, k.monthly_token_limit)}<div class="muted" style="font-size:0.7rem">tokens this month</div></td>
         <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-rev="${k.id}">Revoke</button></td></tr>`
       ).join('');
       tb.querySelectorAll('[data-rev]').forEach((btn) => {
@@ -853,7 +973,35 @@
       if (v.id === 'openai-codex') return 'chatgpt-sub';
       if (v.id === 'anthropic-claude-code') return 'claude-sub';
       if (v.id === 'xai-grok-cli') return 'grok-sub';
+      if (v.id === 'google-antigravity') return 'antigravity-sub';
+      if (v.id === 'kimi-code') return 'kimi-sub';
       return v.id;
+    }
+
+    /**
+     * Set the connect form up for a second account of a vendor already in use.
+     *
+     * Routing splits traffic across every seat that claims a model, so a second
+     * seat is only useful if it claims the same models as the first — which is
+     * why the list is copied rather than left to be discovered from the vendor.
+     * The id gets the first free numeric suffix so the two do not collide.
+     */
+    function prepareSiblingSeat(existing, providers) {
+      const base = existing.id.replace(/-\d+$/, '');
+      const taken = new Set(providers.map((p) => p.id));
+      let suffix = 2;
+      while (taken.has(`${base}-${suffix}`)) suffix++;
+
+      $('o-vendor').value = existing.vendor;
+      onOAuthVendorChange();
+      $('o-id').value = `${base}-${suffix}`;
+      $('o-name').value = `${existing.name} (${suffix})`;
+      $('o-models').value = JSON.stringify(existing.models || []);
+      oauthStatus(
+        `Connecting a second ${existing.vendor} account. It will share traffic with ${existing.id}; adjust the weights afterwards if you want an uneven split.`,
+        false
+      );
+      $('o-vendor').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function onOAuthVendorChange() {
@@ -886,11 +1034,21 @@
       const paths = (v.supported_paths || []).length
         ? ' Serves ' + v.supported_paths.join(', ') + ' only — other paths fall through to your API-key providers.'
         : '';
+      // Said before connecting, not after: a seat that cannot serve traffic is
+      // still worth connecting, but only if you knew that going in.
+      const routing = v.routable === false
+        ? ' This gateway cannot route requests to ' + v.label + ' yet — connecting gives you credential refresh, model discovery and usage limits, but no inference.'
+        : '';
+      // Some vendors need their client credentials configured on the deployment
+      // before any authorization can succeed. Better said here than at exchange.
+      const missing = (v.missing_secrets || []).length
+        ? ' Not configured yet: set ' + v.missing_secrets.join(' and ') + ' as Worker secrets first.'
+        : '';
       $('o-vendor-note').textContent = (v.supports_device_code
         ? 'Authorize in the browser: open the page shown and type in the code.'
         : v.supports_manual_code
           ? "Authorize in the browser, then paste back the localhost URL you land on. Or import the CLI's credential file below."
-          : "Log in with the vendor CLI, then import the credential file it wrote.") + paths;
+          : "Log in with the vendor CLI, then import the credential file it wrote.") + paths + routing + missing;
     }
     $('o-vendor').onchange = onOAuthVendorChange;
 
@@ -1020,6 +1178,180 @@
       } catch (e) { oauthStatus(e.message, true); }
     };
 
+    /**
+     * Vendor-side limits per seat, cached for the visit.
+     *
+     * Every read here is a live call to the vendor's own endpoint, so switching
+     * tabs must not re-issue them; the operator refreshes a seat explicitly.
+     */
+    const oauthQuota = {};
+
+    function meterTone(percent) {
+      if (percent >= 90) return ' crit';
+      if (percent >= 75) return ' warn';
+      return '';
+    }
+
+    /** "in 3h 20m" — how long until a window refills. */
+    function untilLabel(ms) {
+      if (!ms) return '';
+      const delta = ms - Date.now();
+      if (delta <= 0) return 'resets now';
+      const mins = Math.round(delta / 60000);
+      if (mins < 60) return 'resets in ' + mins + 'm';
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 48) {
+        const rem = mins % 60;
+        return 'resets in ' + hrs + 'h' + (rem ? ' ' + rem + 'm' : '');
+      }
+      return 'resets in ' + Math.round(hrs / 24) + 'd';
+    }
+
+    function periodLabel(hours) {
+      if (!hours) return '';
+      if (hours < 24) return Math.round(hours) + 'h window';
+      const days = Math.round(hours / 24);
+      return days === 7 ? 'weekly window' : days + 'd window';
+    }
+
+    /**
+     * Recorded history for one window, as a small inline SVG.
+     *
+     * Fixed 0-100 vertical scale rather than fitting the data: a line that
+     * always fills the box would make 2% look like 90%. Two points is the
+     * minimum worth drawing — one sample is not a trend.
+     */
+    function sparkline(points) {
+      if (!points || points.length < 2) return '';
+      const usable = points.filter((p) => typeof p.p === 'number');
+      if (usable.length < 2) return '';
+      const w = 54, h = 14;
+      const step = w / (usable.length - 1);
+      const d = usable.map((p, i) =>
+        `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - (Math.max(0, Math.min(100, p.p)) / 100) * h).toFixed(1)}`
+      ).join(' ');
+      const first = Math.round(usable[0].p);
+      const last = Math.round(usable[usable.length - 1].p);
+      return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trend: ${first}% to ${last}%"><title>${usable.length} samples · ${first}% → ${last}%</title><path d="${d}"/></svg>`;
+    }
+
+    function renderLimits(id) {
+      const cell = $('lim-' + id);
+      if (!cell) return;
+      const entry = oauthQuota[id];
+      const refreshBtn = `<button type="button" class="linkish" data-o-limits="${esc(id)}">Refresh</button>`;
+
+      if (!entry || entry.state === 'loading') {
+        cell.innerHTML = '<span class="muted" style="font-size:0.75rem">Reading limits from the vendor…</span>';
+      } else if (entry.state === 'error') {
+        // One seat's limits failing says nothing about the others, so this is a
+        // note on the row rather than an error on the page.
+        cell.innerHTML = `<div class="limits-head"><strong>Limits unavailable</strong><span>${esc(entry.message)}</span>${refreshBtn}</div>`;
+      } else if (entry.state === 'unsupported') {
+        cell.innerHTML = `<div class="limits-head"><span>${esc(entry.message)}</span></div>`;
+      } else {
+        const q = entry.data;
+        const meters = (q.windows || []).map((w) => {
+          const pct = typeof w.usedPercent === 'number' ? Math.max(0, Math.min(100, w.usedPercent)) : null;
+          const detail = [
+            pct === null ? 'not reported' : pct.toFixed(0) + '% used',
+            untilLabel(w.resetsAt),
+            periodLabel(w.periodHours),
+          ].filter(Boolean).join(' · ');
+          return `<div>
+            <div class="meter-label"><span>${esc(w.label)}</span><span>${esc(detail)}</span></div>
+            <div class="meter-row">
+              <div class="meter-track"><div class="meter-fill${pct === null ? '' : meterTone(pct)}" style="width:${pct === null ? 0 : pct}%"></div></div>
+              ${sparkline(entry.history?.[w.id])}
+            </div>
+          </div>`;
+        }).join('');
+        // The action spends something at the vendor, so it is rendered greyed
+        // out rather than hidden when unavailable — discovering it exists is
+        // separate from being able to use it.
+        const action = q.action
+          ? `<button type="button" class="linkish" data-o-action="${esc(id)}" data-action-id="${esc(q.action.id)}"${q.action.available ? '' : ' disabled style="opacity:0.45;cursor:default"'}>${esc(q.action.label)}</button>`
+          : '';
+        const head = [
+          '<strong>Vendor limits</strong>',
+          q.plan ? '<span>' + esc(q.plan) + ' plan</span>' : '',
+          '<span>as of ' + esc(new Date(q.fetchedAt).toLocaleTimeString()) + '</span>',
+          refreshBtn,
+          action,
+        ].filter(Boolean).join('');
+        const notes = (q.notes || []).map((n) => `<div class="muted" style="font-size:0.75rem;margin-top:0.5rem">${esc(n)}</div>`).join('');
+        cell.innerHTML = `<div class="limits-head">${head}</div>`
+          + (meters ? `<div class="meters">${meters}</div>` : '<span class="muted" style="font-size:0.75rem">The vendor reported no limit windows for this account.</span>')
+          + notes;
+      }
+
+      const btn = cell.querySelector('[data-o-limits]');
+      if (btn) btn.onclick = () => loadLimits(id);
+      const actionBtn = cell.querySelector('[data-o-action]:not([disabled])');
+      if (actionBtn) {
+        actionBtn.onclick = async () => {
+          if (!confirm('This spends a credit at the vendor and cannot be undone. Continue?')) return;
+          actionBtn.textContent = 'Redeeming…';
+          try {
+            await api('/oauth/' + encodeURIComponent(id) + '/quota-action', {
+              method: 'POST',
+              body: JSON.stringify({ action: actionBtn.dataset.actionId }),
+            });
+          } catch (e) {
+            oauthStatus(e.message, true);
+          }
+          // Re-read either way: the credit may have been spent before the error.
+          await loadLimits(id);
+        };
+      }
+    }
+
+    async function loadLimits(id) {
+      oauthQuota[id] = { state: 'loading' };
+      renderLimits(id);
+      // History is recorded by the scheduled sampler, so it is a local read and
+      // never the reason the live lookup is slow — hence both at once.
+      const [usage, history] = await Promise.allSettled([
+        api('/oauth/' + encodeURIComponent(id) + '/usage'),
+        api('/oauth/' + encodeURIComponent(id) + '/history'),
+      ]);
+      const series = history.status === 'fulfilled' ? history.value.series : {};
+      if (usage.status === 'rejected') {
+        oauthQuota[id] = { state: 'error', message: usage.reason.message };
+      } else {
+        const r = usage.value;
+        oauthQuota[id] = r.status === 'unsupported'
+          ? { state: 'unsupported', message: r.message }
+          : { state: 'ok', data: r, history: series };
+      }
+      renderLimits(id);
+    }
+
+    /**
+     * Routing state for one seat.
+     *
+     * Three separate things can take a seat out of service and they need
+     * different responses, so they are distinct badges rather than one
+     * "unhealthy": cooling down clears itself, deactivated needs a reconnect,
+     * and not-routable is a gap in this gateway rather than a fault on the seat.
+     */
+    function healthBadges(p) {
+      const out = [];
+      if (p.routable === false) {
+        out.push('<span class="badge badge-manual" title="This gateway can hold and refresh the credential, and read its limits, but cannot route requests to this vendor yet.">Limits only</span>');
+      }
+      if (!p.is_active) {
+        out.push(`<span class="badge" style="background:var(--danger-bg);color:var(--danger)" title="${esc(p.disabled_reason || 'Deactivated')}">Deactivated</span>`);
+      } else if (p.cooling_down) {
+        const until = p.cooldown_until ? new Date(p.cooldown_until) : null;
+        const reason = p.cooldown_reason === 'quota' ? 'Out of quota'
+          : p.cooldown_reason === 'auth' ? 'Auth failing'
+          : 'Upstream failing';
+        out.push(`<span class="badge" style="background:var(--accent-bg);color:var(--accent)" title="${esc(p.last_failure_message || '')}">${reason}${until ? ' · until ' + esc(until.toLocaleTimeString()) : ''}</span>`);
+      }
+      return out.length ? '<div style="margin-top:0.35rem">' + out.join(' ') + '</div>' : '';
+    }
+
     async function refreshOAuth() {
       if (currentUser?.role !== 'admin') return;
       const { providers } = await api('/oauth/providers');
@@ -1030,22 +1362,28 @@
       }
       tb.innerHTML = providers.map((p) => {
         const vendor = oauthVendors.find((v) => v.id === p.vendor);
+        const limitsRow = `<tr><td colspan="4" class="limits" id="lim-${esc(p.id)}"></td></tr>`;
         const expiry = p.expires_at
           ? new Date(p.expires_at).toLocaleString()
           : 'unknown';
         const badge = p.expired
           ? '<span class="badge" style="background:var(--danger-bg);color:var(--danger)">Needs refresh</span>'
           : '<span class="badge badge-live">Fresh</span>';
-        return `<tr>
-          <td><strong>${esc(p.name)}</strong>${p.account ? ' · ' + esc(p.account) : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)} · ${esc(vendor ? vendor.label : p.vendor)}</span></td>
+        return `<tr class="seat-row">
+          <td><strong>${esc(p.name)}</strong>${p.account ? ' · ' + esc(p.account) : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)} · ${esc(vendor ? vendor.label : p.vendor)}</span>${healthBadges(p)}</td>
           <td style="font-size:0.75rem">${esc(expiry)} ${badge}</td>
-          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}<br><button type="button" class="linkish" data-o-sync="${esc(p.id)}">Sync from vendor</button> · <button type="button" class="linkish" data-o-models="${esc(p.id)}">Edit</button></td>
+          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}<br><button type="button" class="linkish" data-o-sync="${esc(p.id)}">Sync from vendor</button> · <button type="button" class="linkish" data-o-models="${esc(p.id)}">Edit</button> · <button type="button" class="linkish" data-o-weight="${esc(p.id)}">Weight ${esc(p.weight ?? 1)}</button> · <button type="button" class="linkish" data-o-clone="${esc(p.id)}">Add another account</button></td>
           <td style="white-space:nowrap">
             <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-refresh="${esc(p.id)}">Refresh</button>
+            ${p.cooling_down || !p.is_active ? `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-reinstate="${esc(p.id)}">Reinstate</button>` : ''}
             <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-del="${esc(p.id)}">Disconnect</button>
           </td>
-        </tr>`;
+        </tr>${limitsRow}`;
       }).join('');
+      // Limits are fetched live from each vendor, so render the rows first and
+      // fill them in as the answers arrive rather than blocking the table.
+      providers.forEach((p) => renderLimits(p.id));
+      providers.forEach((p) => { if (!oauthQuota[p.id]) loadLimits(p.id); });
       tb.querySelectorAll('[data-o-refresh]').forEach((btn) => {
         btn.onclick = async () => {
           btn.textContent = '…';
@@ -1054,6 +1392,34 @@
           } catch (e) {
             alert(e.message);
           }
+          await refreshOAuth();
+        };
+      });
+      tb.querySelectorAll('[data-o-reinstate]').forEach((btn) => {
+        btn.onclick = async () => {
+          btn.textContent = '…';
+          try {
+            await api('/oauth/' + btn.dataset.oReinstate + '/reinstate', { method: 'POST' });
+          } catch (e) {
+            oauthStatus(e.message, true);
+          }
+          await Promise.all([refreshOAuth(), refreshProviders()]);
+        };
+      });
+      tb.querySelectorAll('[data-o-clone]').forEach((btn) => {
+        btn.onclick = () => {
+          const p = providers.find((x) => x.id === btn.dataset.oClone);
+          if (p) prepareSiblingSeat(p, providers);
+        };
+      });
+      tb.querySelectorAll('[data-o-weight]').forEach((btn) => {
+        btn.onclick = async () => {
+          const p = providers.find((x) => x.id === btn.dataset.oWeight);
+          const next = prompt('Share of traffic among seats serving the same model (1-100):', String(p?.weight ?? 1));
+          if (next === null) return;
+          try {
+            await api('/oauth/' + btn.dataset.oWeight + '/weight', { method: 'POST', body: JSON.stringify({ weight: Number(next) }) });
+          } catch (e) { oauthStatus(e.message, true); return; }
           await refreshOAuth();
         };
       });
@@ -1128,9 +1494,43 @@
       $('usage-by-model').innerHTML = (data.by_model || []).map((r) => `<tr><td style="font-family:var(--mono);font-size:0.7rem">${r.model}</td><td>${r.provider}</td><td class="num">${fmt(r.requests)}</td></tr>`).join('');
     }
 
+    async function refreshLogs() {
+      const filter = $('logs-filter').value;
+      const { logs } = await api('/logs?limit=50' + (filter === 'error' ? '&status=error' : ''));
+      const tb = $('logs-tbody');
+      if (!logs.length) {
+        tb.innerHTML = '<tr><td colspan="6" class="muted">No requests recorded yet.</td></tr>';
+        return;
+      }
+      tb.innerHTML = logs.map((l) => {
+        // A NULL status is a row from before outcomes were recorded, and those
+        // were only ever written on success.
+        const status = l.status_code == null ? 200 : l.status_code;
+        const ok = status < 400;
+        const outcome = ok
+          ? `<span class="badge badge-live">${status}</span>`
+          : `<span class="badge" style="background:var(--danger-bg);color:var(--danger)">${status}</span>`;
+        const detail = !ok && l.error_message
+          ? `<div class="muted" style="font-size:0.7rem;max-width:32rem">${esc(l.error_message)}</div>`
+          : '';
+        const tokens = (Number(l.prompt_tokens) || 0) + (Number(l.completion_tokens) || 0);
+        return `<tr>
+          <td style="font-size:0.7rem;white-space:nowrap">${esc(new Date(l.created_at + 'Z').toLocaleString())}${l.user_email ? '<br><span class="muted">' + esc(l.user_email) + '</span>' : ''}</td>
+          <td style="font-family:var(--mono);font-size:0.7rem">${esc(l.model)}</td>
+          <td style="font-size:0.75rem">${esc(l.provider)}</td>
+          <td>${outcome}${detail}</td>
+          <td class="num">${tokens ? fmt(tokens) : '—'}</td>
+          <td class="num">${l.duration_ms == null ? '—' : fmt(l.duration_ms)}</td>
+        </tr>`;
+      }).join('');
+    }
+
     async function refreshUsers() {
       if (currentUser?.role !== 'admin') return;
       const [{ users }, { invites }] = await Promise.all([api('/users'), api('/invites')]);
+      // Shared with the Providers panel, which offers these when assigning
+      // which account a metered provider bills to.
+      knownUsers = (users || []).filter((u) => u.is_active);
       $('users-tbody').innerHTML = (users || []).map((u) =>
         `<tr><td>${u.email}</td><td>${u.role}</td><td>${u.is_active ? 'yes' : 'no'}</td>
         <td>${u.id === currentUser?.userId ? '<span class="muted">you</span>' : `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-user-del="${u.id}">Delete</button>`}</td></tr>`
@@ -1162,7 +1562,7 @@
       $('app').classList.remove('hidden');
       applyRoleUI();
       await loadCatalog();
-      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshUsers(), loadOAuthVendors().then(refreshOAuth)]);
+      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshLogs(), refreshUsers(), loadOAuthVendors().then(refreshOAuth)]);
     }
 
     $('login-btn').onclick = async () => {
@@ -1266,6 +1666,8 @@
     };
     $('usage-days').onchange = refreshUsage;
     $('refresh-usage').onclick = refreshUsage;
+    $('logs-filter').onchange = refreshLogs;
+    $('refresh-logs').onclick = refreshLogs;
 
     (async () => {
       // Pre-fill invite from URL if present (?invite=inv-...)

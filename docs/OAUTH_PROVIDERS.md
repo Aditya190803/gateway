@@ -17,10 +17,59 @@ time in this.
 | ChatGPT Plus/Pro (Codex) | `openai-codex` | `openai` | Approve, paste the URL back | `/v1/responses` only |
 | Claude Pro/Max (Claude Code) | `anthropic-claude-code` | `anthropic` | Approve, paste the URL back | Full Anthropic surface |
 | Grok (Grok CLI) | `xai-grok-cli` | `x-ai` | Type a code into xAI's page | Chat, via the CLI chat proxy |
+| Antigravity (Google IDE) | `google-antigravity` | `google-antigravity` | Approve, paste the URL back | Chat, via Code Assist |
+| Kimi Code | `kimi-code` | `moonshot` | Type a code into Kimi's page | Chat, via the coding API |
 
-All three can be connected in the browser from Subscriptions → Connect an
-account, and all three can alternatively be connected by importing a credential
-file. Both routes end in the same place.
+Each can be connected in the browser from Subscriptions → Connect an account,
+and each can alternatively be connected by importing a credential file. Both
+routes end in the same place.
+
+### Antigravity needs its client credentials configured
+
+Every other adapter here authorizes as a public client with PKCE and no secret.
+Google issues installed applications a client *secret* as well, and although it
+ships inside the desktop app and is not confidential in any real sense, it is
+still a credential belonging to Google rather than to this project — so it is
+not committed. Read both values out of the Antigravity client and set them:
+
+```bash
+npx wrangler secret put ANTIGRAVITY_CLIENT_ID
+npx wrangler secret put ANTIGRAVITY_CLIENT_SECRET
+```
+
+Until they are set, Antigravity refuses to authorize or refresh and says so, and
+the connect form names the missing secrets rather than letting you get as far as
+a failed token exchange. Seats already connected keep serving traffic on their
+current access token but cannot refresh, so set these before the token lapses.
+
+### Antigravity is not a credential swap
+
+The other vendors speak a wire format the gateway already implements, so
+connecting a seat changes only which token and host a request uses. Antigravity
+speaks `v1internal` on `cloudcode-pa.googleapis.com`, where the body is a Gemini
+payload wrapped as
+
+```json
+{ "model": "…", "project": "…", "requestId": "…", "requestType": "agent",
+  "request": { "contents": [...], "generationConfig": {...} } }
+```
+
+and every response — including each SSE frame — comes back as `{"response": …}`.
+
+So it has its own gateway provider, `src/providers/google-antigravity`. That
+provider does not re-implement any Gemini translation: it reuses Google's entire
+parameter map with each target path moved under `request.`, and unwraps the
+envelope before handing responses to Google's transforms. Anything Gemini gains
+here, Antigravity gains, because there is one translation and it lives in
+`src/providers/google`.
+
+**The project id matters.** Quota, model discovery and every generation need the
+Cloud project the account is onboarded to. The gateway reads it once at connect
+time from `loadCodeAssist` and stores it beside the tokens; from there it
+travels in the provider config, because a parameter transform can read provider
+options but not headers. An account that has never opened the Antigravity IDE
+has no project yet, and the connection says so rather than failing opaquely
+later.
 
 ### Browser authorization
 
@@ -32,9 +81,10 @@ listening there, **and the authorization code is sitting in the address bar**.
 Copy the whole URL and paste it in. The bare code and Anthropic's `code#state`
 form are accepted too. A `state` that does not match the attempt is rejected.
 
-**Grok — type a code into xAI's page.** xAI's client authorizes by device code
-(RFC 8628), so there is nothing to paste back: the gateway shows a short code
-and a link to `accounts.x.ai/oauth2/device`, and polls until you approve.
+**Grok and Kimi — type a code into the vendor's page.** Both clients authorize
+by device code
+(RFC 8628), so there is nothing to paste back: the gateway shows a
+short code and a link to the vendor's device page, and polls until you approve.
 
 ### Importing a credential file instead
 
@@ -47,6 +97,8 @@ as JSON or as raw file contents:
 | Codex | `~/.codex/auth.json` (`codex login`) |
 | Claude | `~/.claude/.credentials.json` — on macOS, Keychain item `Claude Code-credentials` |
 | Grok | the auth JSON the Grok CLI login writes (`"type": "xai"`) |
+| Antigravity | the auth JSON a proxy writes after the Antigravity login (`"type": "antigravity"`) |
+| Kimi | the auth JSON the Kimi Code login writes (`"type": "kimi"`) |
 
 ## What you are agreeing to
 
@@ -209,6 +261,143 @@ whether it has lapsed. It never returns the tokens themselves. `/refresh`
 forces a round trip so you can verify a connection without sending real
 traffic.
 
+### See how much of the subscription is left
+
+```bash
+curl https://<gateway>/admin/oauth/chatgpt-sub/usage -b cookie.txt
+```
+
+```json
+{
+  "status": "success",
+  "plan": "pro",
+  "windows": [
+    { "id": "code-0", "label": "Rolling 5h", "usedPercent": 41.2,
+      "resetsAt": 1755412800000, "periodHours": 5 },
+    { "id": "code-1", "label": "Weekly", "usedPercent": 63.0,
+      "resetsAt": 1755840000000, "periodHours": 168 }
+  ],
+  "notes": ["2 rate-limit reset credits available"],
+  "fetchedAt": 1755400000000
+}
+```
+
+This is the **seat's** quota — the rolling windows the vendor's own client
+shows — and is a different question from `/admin/usage`, which reports what this
+gateway spent. A subscription has the capacity of one interactive user, so this
+is what tells you a seat is about to start refusing requests.
+
+| Vendor | Reported |
+|---|---|
+| Claude Pro/Max | 5-hour session window, the weekly windows (all models, Opus, Sonnet, Cowork, OAuth apps), any per-model weekly cap, plan tier, extra-usage credits |
+| ChatGPT (Codex) | Rolling and weekly/monthly rate-limit windows, the same again for code review, plan type, reset credits |
+| Grok | Credit consumption for the current billing period, per-product usage, monthly spend against the cap |
+| Antigravity | Every quota bucket the Code Assist backend reports, per group, with its window and reset time |
+| Kimi | Each limit with a window, derived from the counts the coding API reports |
+
+The dashboard shows the same thing as meters under each row in
+**Subscriptions**, loaded once per visit with a per-seat **Refresh**.
+
+### History and alerts
+
+A live read answers "how much is left right now", for whoever is looking. An
+hourly Cron Trigger samples every connected seat and keeps the samples, which
+covers the case nobody is looking:
+
+```bash
+curl 'https://<gateway>/admin/oauth/chatgpt-sub/history?days=7' -b cookie.txt
+```
+
+```json
+{ "days": 7, "series": { "code-0": [ { "t": 1755400000000, "p": 41.2 }, … ] } }
+```
+
+The dashboard draws each series as a sparkline beside its meter, on a fixed
+0–100 scale so a window at 2% cannot look like one at 90%.
+
+Set `ALERT_WEBHOOK_URL` and the same job posts when a window crosses **75%,
+90% or 100%**. Slack and Discord webhook URLs work unchanged; anything else
+receives the same JSON, which carries the message under both `text` and
+`content`. Each window is tracked separately — a Claude seat can be fine on its
+5-hour window and out of weekly Opus, and one number for the seat would hide
+which limit actually bit. A crossing notifies once: the level is remembered, and
+only a *rise* is news, so a window that resets is recorded silently and becomes
+eligible to notify again.
+
+The same job prunes the request log (`LOG_RETENTION_DAYS`, default 30) and quota
+history (90 days).
+
+These are the vendors' own client endpoints, not public APIs, and carry the same
+caveat as everything else here: they can change shape or disappear. A seat whose
+lookup fails reports `502` with the vendor's message and is shown as "Limits
+unavailable" on that row alone; a vendor with no usage endpoint at all answers
+`200` with `"status": "unsupported"`.
+
+### Spend a reset credit
+
+Some vendors sell a way out of a rate-limit window. Where one exists, the usage
+snapshot advertises it as `action` and it is redeemed explicitly:
+
+```bash
+curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/quota-action \
+  -H 'content-type: application/json' -b cookie.txt \
+  -d '{"action":"reset-credit"}'
+```
+
+Today only Codex offers one. It is never redeemed automatically on a 429: the
+credit is spent whether or not it was needed, so that decision stays with the
+operator. In the dashboard it is the button beside the limits, greyed out when
+the account has none left.
+
+### When a seat runs out: cooldown and failover
+
+A subscription has the quota of one interactive user, so it runs out. The
+gateway treats that as a routing fact rather than an error to hand back:
+
+**Failures put a provider in cooldown.** A `429` or `402` is quota, `401`/`403`
+is auth, `5xx` is the vendor having a bad day; a `400` is your request and
+counts against nobody. Quota honours the vendor's `Retry-After` when it sends
+one and otherwise waits five minutes, auth waits five, and server errors back
+off from thirty seconds, doubling, capped at ten.
+
+**Routing skips a cooling-down provider** and picks another credential that
+serves the same model. Where several are healthy, the choice is weighted, so two
+seats at equal weight split traffic evenly instead of the first absorbing all of
+it. If *every* candidate is cooling down the request is still sent — to whichever
+recovers soonest — because a cooldown is a prediction and failing a request on a
+prediction is worse than trying.
+
+**The request that discovers the exhaustion is retried**, not just the ones
+after it, up to three providers. Retrying needs the request body a second time,
+so bodies over 1 MB stream straight through and are not retried; everything
+normal-sized is. A retry never lands on a provider already tried for that
+request.
+
+**Three consecutive auth failures deactivate the provider.** Only auth: a
+credential the vendor keeps rejecting is broken and needs a human, whereas an
+exhausted quota is a seat working exactly as sold, and disabling it every time
+it hit its weekly ceiling would be absurd. The row records why.
+
+Any success clears the whole run — failure count, cooldown, everything.
+
+To override, once you have fixed the underlying problem:
+
+```bash
+curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/reinstate -b cookie.txt
+# API-key providers: /admin/providers/<id>/reinstate
+```
+
+Weight is `1` unless you say otherwise:
+
+```bash
+curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/weight \
+  -H 'content-type: application/json' -b cookie.txt -d '{"weight":3}'
+```
+
+`GET /admin/oauth/providers` reports `cooling_down`, `cooldown_until`,
+`cooldown_reason`, `failure_count`, `last_failure_message` and `disabled_reason`
+alongside the rest; the dashboard renders them as badges on the row.
+
 ### Change which models route to a subscription
 
 Subscription endpoints expose no `/models` API, so the model list on the
@@ -237,7 +426,9 @@ curl -X DELETE https://<gateway>/admin/providers/chatgpt-sub -b cookie.txt
 ## Using it
 
 Once connected, an OAuth provider is routed to by model name like any other, using
-your normal managed `sk-` key — the client sends nothing special:
+your normal managed `sk-` key — the client sends nothing special. The
+client-side guide, including SDK and tool configuration, is
+[SUBSCRIPTIONS_AS_API.md](SUBSCRIPTIONS_AS_API.md):
 
 ```bash
 curl https://<gateway>/v1/responses \

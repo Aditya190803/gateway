@@ -40,6 +40,8 @@ export type ResolvedCredential = {
   extraHeaders?: Record<string, string>;
   /** Where the credential goes, when it is not the vendor's usual API-key slot. */
   authHeader?: { header: string; scheme?: string };
+  /** Extra provider-config keys the transform needs; see UpstreamCall. */
+  configOverrides?: Record<string, string>;
 };
 
 export type CredentialError =
@@ -96,6 +98,7 @@ export async function resolveProviderCredential(
       customHost: call.baseUrl,
       extraHeaders: call.headers,
       authHeader: call.auth,
+      configOverrides: call.configOverrides,
     },
   };
 }
@@ -122,6 +125,12 @@ export function applyProviderHeaders(
   };
   if (credential.customHost) {
     config.custom_host = credential.customHost;
+  }
+  // Account facts the provider's parameter transform needs. They ride in the
+  // config rather than a header because that is the only channel that reaches
+  // providerOptions, which is what a transform can read.
+  for (const [key, value] of Object.entries(credential.configOverrides ?? {})) {
+    config[key] = value;
   }
 
   // Vendor-required headers ride along as forwarded headers. constructRequestHeaders

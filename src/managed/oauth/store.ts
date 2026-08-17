@@ -243,7 +243,7 @@ export async function resolveOAuthCredential(
 
     let refreshed: OAuthTokens;
     try {
-      refreshed = await adapter.refresh(tokens);
+      refreshed = await adapter.refresh(tokens, env);
     } catch (e) {
       // The claim stays bumped, so the next request re-claims and retries
       // rather than reusing the refresh token we just spent.
@@ -319,7 +319,7 @@ export async function forceRefresh(
 
   let refreshed: OAuthTokens;
   try {
-    refreshed = await adapter.refresh(tokens);
+    refreshed = await adapter.refresh(tokens, env);
   } catch (e) {
     return {
       ok: false,
