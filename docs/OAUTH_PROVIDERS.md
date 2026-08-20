@@ -73,13 +73,26 @@ later.
 
 ### Browser authorization
 
-**Codex and Claude — approve, then paste back the URL.** These clients register
-a loopback redirect (`localhost:1455` and `localhost:54545`) that a deployed
-gateway cannot receive. That is fine: approving sends the browser to that
-address, the page fails with *"this site can't be reached"* because nothing is
-listening there, **and the authorization code is sitting in the address bar**.
-Copy the whole URL and paste it in. The bare code and Anthropic's `code#state`
-form are accepted too. A `state` that does not match the attempt is rejected.
+**Codex, Claude, and Antigravity — approve, then paste back the URL.** These
+clients register a loopback redirect (`localhost:1455`, `localhost:54545`,
+`localhost:51121`) that a deployed gateway cannot receive. That is fine:
+approving sends the browser to that address, the page fails with *"this site
+can't be reached"* because nothing is listening there, **and the authorization
+code is sitting in the address bar**. Copy the whole URL and paste it in. The
+bare code and Anthropic's `code#state` form are accepted too. A `state` that
+does not match the attempt is rejected.
+
+Or skip the copy-paste: run `node scripts/oauth-catch.mjs <codex|claude|antigravity> <gateway-url>`
+before clicking Authorize — for example
+`node scripts/oauth-catch.mjs codex https://your-gateway.example.workers.dev`, or
+`node scripts/oauth-catch.mjs claude http://localhost:8787` against a local dev
+server. The gateway URL is required, not defaulted: this catcher redirects a
+live browser tab, and a wrong guess (say, a local test landing on prod) sends
+the code to the wrong deployment with no visible error. It listens on that
+exact loopback port, catches the redirect the vendor sends the browser to, and
+forwards the code to `/admin/dashboard` as a query param — the dashboard
+finishes the connection itself as soon as it sees one, the same way it would
+from a pasted URL. One redirect and the script exits.
 
 **Grok and Kimi — type a code into the vendor's page.** Both clients authorize
 by device code
@@ -202,6 +215,15 @@ The same operations are available in the dashboard at
 `/admin/dashboard` → **Subscriptions** tab, which is the easier path; the curl
 examples are for scripting.
 
+`provider_id` is worth picking deliberately — it shows up in `owned_by` on
+`/v1/models` and in any `provider_id/model` address (see
+[SUBSCRIPTIONS_AS_API.md](SUBSCRIPTIONS_AS_API.md)), and the vendor alias
+(`codex/`, `claude/`, `grok/`, `anti/`, `kimi/`) already routes without ever
+naming a row, so there's no reason the id itself has to say which vendor it is
+or that it's a subscription seat. `q1-a` below is a stand-in for whatever short,
+opaque id you pick; the dashboard suggests one in the same style
+(`q1-a`, `q1-b`, …) when you connect from the browser.
+
 ### Connect ChatGPT (Codex)
 
 The Codex client only accepts `http://localhost:1455/auth/callback` as a
@@ -219,7 +241,7 @@ The request body is built on stdin and piped in. Do not pass it with `-d "$(…)
 ```bash
 jq -n --slurpfile creds ~/.codex/auth.json '{
       vendor: "openai-codex",
-      provider_id: "chatgpt-sub",
+      provider_id: "q1-a",
       provider_name: "ChatGPT Pro seat",
       credentials: $creds[0]
     }' | curl -X POST https://<gateway>/admin/oauth/import \
@@ -253,7 +275,7 @@ as well. The dashboard asks for confirmation and handles both calls for you.
 ```bash
 curl https://<gateway>/admin/oauth/vendors    -b cookie.txt
 curl https://<gateway>/admin/oauth/providers  -b cookie.txt
-curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/refresh -b cookie.txt
+curl -X POST https://<gateway>/admin/oauth/q1-a/refresh -b cookie.txt
 ```
 
 `/providers` reports the connected account, the routing model list, expiry, and
@@ -264,7 +286,7 @@ traffic.
 ### See how much of the subscription is left
 
 ```bash
-curl https://<gateway>/admin/oauth/chatgpt-sub/usage -b cookie.txt
+curl https://<gateway>/admin/oauth/q1-a/usage -b cookie.txt
 ```
 
 ```json
@@ -305,7 +327,7 @@ hourly Cron Trigger samples every connected seat and keeps the samples, which
 covers the case nobody is looking:
 
 ```bash
-curl 'https://<gateway>/admin/oauth/chatgpt-sub/history?days=7' -b cookie.txt
+curl 'https://<gateway>/admin/oauth/q1-a/history?days=7' -b cookie.txt
 ```
 
 ```json
@@ -339,7 +361,7 @@ Some vendors sell a way out of a rate-limit window. Where one exists, the usage
 snapshot advertises it as `action` and it is redeemed explicitly:
 
 ```bash
-curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/quota-action \
+curl -X POST https://<gateway>/admin/oauth/q1-a/quota-action \
   -H 'content-type: application/json' -b cookie.txt \
   -d '{"action":"reset-credit"}'
 ```
@@ -383,14 +405,14 @@ Any success clears the whole run — failure count, cooldown, everything.
 To override, once you have fixed the underlying problem:
 
 ```bash
-curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/reinstate -b cookie.txt
+curl -X POST https://<gateway>/admin/oauth/q1-a/reinstate -b cookie.txt
 # API-key providers: /admin/providers/<id>/reinstate
 ```
 
 Weight is `1` unless you say otherwise:
 
 ```bash
-curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/weight \
+curl -X POST https://<gateway>/admin/oauth/q1-a/weight \
   -H 'content-type: application/json' -b cookie.txt -d '{"weight":3}'
 ```
 
@@ -404,7 +426,7 @@ Subscription endpoints expose no `/models` API, so the model list on the
 provider row is authoritative and is edited directly:
 
 ```bash
-curl -X POST https://<gateway>/admin/oauth/chatgpt-sub/models \
+curl -X POST https://<gateway>/admin/oauth/q1-a/models \
   -H 'content-type: application/json' -b cookie.txt \
   -d '{"models":["gpt-5-codex"]}'
 ```
@@ -418,7 +440,7 @@ specific enough not to swallow traffic meant for a metered provider.
 Deleting the provider row deletes the stored credentials:
 
 ```bash
-curl -X DELETE https://<gateway>/admin/providers/chatgpt-sub -b cookie.txt
+curl -X DELETE https://<gateway>/admin/providers/q1-a -b cookie.txt
 ```
 
 ---

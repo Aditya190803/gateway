@@ -3,678 +3,608 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gateway Admin</title>
+  <meta name="robots" content="noindex" />
+  <title>Gateway admin</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --paper: #f8f6f3;
-      --paper-2: #fff;
-      --ink: #1a1814;
-      --ink-2: #4a4640;
-      --ink-3: #8a847c;
-      --line: #e8e4de;
-      --accent: #c45c26;
-      --accent-hover: #a34a1c;
-      --accent-bg: rgba(196, 92, 38, 0.08);
-      --blue: #2563eb;
-      --blue-bg: rgba(37, 99, 235, 0.08);
-      --danger: #b91c1c;
-      --danger-bg: rgba(185, 28, 28, 0.06);
-      --ok: #15803d;
-      --radius: 14px;
-      --radius-sm: 10px;
-      --font: "Figtree", system-ui, sans-serif;
-      --mono: "JetBrains Mono", monospace;
-      --shadow: 0 1px 2px rgba(26, 24, 20, 0.04), 0 12px 40px rgba(26, 24, 20, 0.06);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: var(--font);
-      font-size: 15px;
-      line-height: 1.55;
-      color: var(--ink);
-      background: var(--paper);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-    }
-    .app { display: flex; min-height: 100vh; }
-    .sidebar {
-      width: 240px;
-      flex-shrink: 0;
-      background: var(--paper-2);
-      border-right: 1px solid var(--line);
-      padding: 1.75rem 1.25rem;
-      display: none;
-    }
-    @media (min-width: 900px) { .sidebar { display: flex; flex-direction: column; } }
-    .sidebar .logo {
-      font-weight: 700;
-      font-size: 1.125rem;
-      letter-spacing: -0.03em;
-      margin-bottom: 0.25rem;
-    }
-    .sidebar .tag { font-size: 0.75rem; color: var(--ink-3); margin-bottom: 1rem; }
-    .user-pill {
-      background: var(--paper);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 0.35rem 0.75rem;
-      margin-bottom: 1.25rem;
-      font-size: 0.75rem;
-    }
-    .user-email { font-weight: 600; color: var(--ink); }
-    .user-role {
-      margin-left: 0.5rem;
-      padding: 0.1rem 0.45rem;
-      border-radius: 999px;
-      background: var(--accent-bg);
-      color: var(--accent);
-      font-size: 0.65rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-    .nav-btn {
-      display: block;
-      width: 100%;
-      text-align: left;
-      padding: 0.65rem 0.85rem;
-      margin-bottom: 0.35rem;
-      border: none;
-      border-radius: var(--radius-sm);
-      background: transparent;
-      font-family: var(--font);
-      font-size: 0.875rem;
-      font-weight: 500;
-      color: var(--ink-2);
-      cursor: pointer;
-    }
-    .nav-btn:hover { background: var(--paper); color: var(--ink); }
-    .nav-btn.active { background: var(--accent-bg); color: var(--accent); }
-    .sidebar .spacer { flex: 1; }
-    .main { flex: 1; padding: 1.5rem 1.25rem 3rem; max-width: 920px; margin: 0 auto; width: 100%; }
-    .mobile-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
-    @media (min-width: 900px) { .mobile-head .tabs { display: none; } }
-    .tabs { display: flex; gap: 0.35rem; flex-wrap: wrap; }
-    .tabs button {
-      padding: 0.45rem 0.75rem;
-      font-size: 0.8125rem;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      background: var(--paper-2);
-      color: var(--ink-2);
-      cursor: pointer;
-      font-family: var(--font);
-      font-weight: 500;
-    }
-    .tabs button.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
-    .panel { display: none; animation: fade 0.2s ease; }
-    .panel.active { display: block; }
-    @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-    .card {
-      background: var(--paper-2);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 1.5rem 1.625rem;
-      box-shadow: var(--shadow);
-      margin-bottom: 1.25rem;
-    }
-    .login-wrap {
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 2rem;
-      background: linear-gradient(160deg, var(--paper) 0%, #efe9e0 100%);
-    }
-    .login-card {
-      width: 100%;
-      max-width: 400px;
-      background: var(--paper-2);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 2rem 1.75rem;
-      box-shadow: var(--shadow);
-    }
-    .login-card h1 {
-      font-size: 1.5rem;
-      font-weight: 700;
-      letter-spacing: -0.04em;
-      margin: 0 0 0.35rem;
-    }
-    .muted { color: var(--ink-3); font-size: 0.875rem; margin: 0 0 1.5rem; }
-    h2.page-title {
-      font-size: 1.375rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      margin: 0 0 0.35rem;
-    }
-    .section-lead { color: var(--ink-3); font-size: 0.875rem; margin: 0 0 1.25rem; }
-    label {
-      display: block;
-      font-size: 0.8125rem;
-      font-weight: 600;
-      color: var(--ink-2);
-      margin-bottom: 0.4rem;
-    }
-    input, select, textarea {
-      width: 100%;
-      padding: 0.7rem 0.9rem;
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      background: var(--paper-2);
-      font-family: var(--font);
-      font-size: 0.9375rem;
-      color: var(--ink);
-      margin-bottom: 1rem;
-      transition: border-color 0.15s, box-shadow 0.15s;
-    }
-    input:focus, select:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-bg);
-    }
-    .field-password { position: relative; margin-bottom: 1rem; }
-    .field-password input { margin-bottom: 0; padding-right: 3.25rem; }
-    button.toggle-pw {
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 2.5rem;
-      height: 2.35rem;
-      border: none;
-      border-radius: 8px;
-      background: var(--paper) !important;
-      color: var(--ink-3);
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      padding: 0;
-      font-size: 0;
-    }
-    button.toggle-pw:hover { color: var(--ink); background: var(--line) !important; }
-    button.toggle-pw svg { width: 20px; height: 20px; }
-    .btn {
-      font-family: var(--font);
-      font-weight: 600;
-      font-size: 0.875rem;
-      padding: 0.65rem 1.2rem;
-      border-radius: var(--radius-sm);
-      border: none;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .btn:active { transform: scale(0.98); }
-    .btn-primary { background: var(--accent); color: #fff; }
-    .btn-primary:hover { background: var(--accent-hover); }
-    .btn-secondary {
-      background: var(--paper-2);
-      color: var(--ink-2);
-      border: 1px solid var(--line);
-    }
-    .btn-secondary:hover { border-color: var(--ink-3); color: var(--ink); }
-    .btn-blue { background: var(--blue); color: #fff; }
-    .btn-blue:hover { background: #1d4ed8; }
-    .btn-row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
-    .grid-2 { display: grid; gap: 1rem; }
-    @media (min-width: 600px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
-    .provider-pick {
-      position: relative;
-      margin-bottom: 1rem;
-    }
-    .provider-pick input { margin-bottom: 0; }
-    .provider-dropdown {
-      position: absolute;
-      z-index: 50;
-      left: 0;
-      right: 0;
-      top: 100%;
-      margin-top: 4px;
-      max-height: 280px;
-      overflow-y: auto;
-      background: var(--paper-2);
-      border: 1px solid var(--line);
-      border-radius: var(--radius-sm);
-      box-shadow: var(--shadow);
-      display: none;
-    }
-    .provider-dropdown.open { display: block; }
-    .provider-opt {
-      padding: 0.65rem 0.9rem;
-      cursor: pointer;
-      border-bottom: 1px solid var(--line);
-      font-size: 0.875rem;
-    }
-    .provider-opt:last-child { border-bottom: none; }
-    .provider-opt:hover { background: var(--paper); }
-    .provider-opt strong { display: block; font-weight: 600; }
-    .provider-opt span { font-size: 0.75rem; color: var(--ink-3); font-family: var(--mono); }
-    .badge {
-      display: inline-block;
-      font-size: 0.65rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 0.2rem 0.45rem;
-      border-radius: 4px;
-      margin-left: 0.35rem;
-      vertical-align: middle;
-    }
-    .badge-live { background: var(--blue-bg); color: var(--blue); }
-    .badge-manual { background: var(--paper); color: var(--ink-3); }
-    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
-    th, td { text-align: left; padding: 0.75rem 0.5rem; border-bottom: 1px solid var(--line); }
-    th { font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); font-weight: 600; }
-    tr:last-child td { border-bottom: none; }
-    .num { text-align: right; font-family: var(--mono); font-size: 0.75rem; }
-    .err {
-      color: var(--danger);
-      font-size: 0.8125rem;
-      padding: 0.65rem 0.85rem;
-      background: var(--danger-bg);
-      border-radius: var(--radius-sm);
-      margin-top: 0.75rem;
-    }
-    .ok-msg { color: var(--ok); font-size: 0.8125rem; font-weight: 500; }
-    .hidden { display: none !important; }
-    .key-box {
-      margin-top: 1rem;
-      padding: 1rem;
-      background: var(--paper);
-      border-radius: var(--radius-sm);
-      border: 1px dashed var(--line);
-    }
-    .key-box code {
-      display: block;
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      word-break: break-all;
-      color: var(--ok);
-      margin: 0.5rem 0;
-    }
-    .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
-    @media (min-width: 600px) { .stats { grid-template-columns: repeat(4, 1fr); } }
-    .stat {
-      padding: 1rem;
-      background: var(--paper);
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-    }
-    .stat b { display: block; font-size: 1.375rem; font-weight: 700; letter-spacing: -0.02em; }
-    .stat small { color: var(--ink-3); font-size: 0.75rem; }
-    .chart { display: flex; align-items: flex-end; gap: 5px; height: 100px; margin: 1rem 0; }
-    .chart .bar {
-      flex: 1;
-      max-width: 36px;
-      background: var(--accent);
-      border-radius: 4px 4px 0 0;
-      min-height: 4px;
-    }
-    /* Vendor-side usage limits, shown under each connected subscription. */
-    /* A seat and its limits are one block, so only the limits row is ruled off. */
-    .seat-row td { border-bottom: none; padding-bottom: 0.4rem; }
-    .limits { padding-top: 0; }
-    .limits-head {
-      display: flex;
-      align-items: baseline;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      font-size: 0.75rem;
-      color: var(--ink-3);
-      margin-bottom: 0.6rem;
-    }
-    .meters { display: grid; gap: 0.55rem; }
-    @media (min-width: 900px) { .meters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem 1.5rem; } }
-    .meter-label {
-      display: flex;
-      justify-content: space-between;
-      gap: 0.75rem;
-      font-size: 0.75rem;
-      margin-bottom: 0.2rem;
-    }
-    .meter-label span:last-child { font-family: var(--mono); color: var(--ink-3); white-space: nowrap; }
-    .meter-row { display: flex; align-items: center; gap: 0.5rem; }
-    .meter-row .meter-track { flex: 1; }
-    /* Trend from recorded samples: the meter says now, this says how it got here. */
-    .spark { width: 54px; height: 14px; flex: none; opacity: 0.75; }
-    .spark path { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linejoin: round; }
-    .meter-track { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-    .meter-fill { height: 100%; border-radius: 3px; background: var(--ok); }
-    /* Colour is the fast read here: the number is the detail, the bar is the alarm. */
-    .meter-fill.warn { background: var(--accent); }
-    .meter-fill.crit { background: var(--danger); }
-    .model-preview {
-      max-height: 160px;
-      overflow-y: auto;
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      background: var(--paper);
-      padding: 0.75rem;
-      border-radius: var(--radius-sm);
-      margin-top: 0.75rem;
-      line-height: 1.6;
-      color: var(--ink-2);
-    }
-    .linkish {
-      background: none;
-      border: none;
-      color: var(--blue);
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 0;
-      font-family: var(--font);
-    }
-    .linkish:hover { text-decoration: underline; }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!--THEME-->
 </head>
 <body>
-  <div id="login-screen" class="login-wrap">
-    <div class="login-card">
-      <h1 id="login-title">Sign in</h1>
-      <p class="muted" id="login-sub">Sign in or create an invited user account.</p>
-      <div id="setup-block" class="hidden">
-        <p class="ok-msg" style="margin-bottom:1rem">First-time setup — create your admin account.</p>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <!-- ------------------------------------------------------------- sign in -->
+  <div id="auth" class="auth" hidden>
+    <div class="auth__inner">
+      <div class="auth__ground">
+        <div class="brand">
+          <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+            <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+          </svg>
+          <span class="brand__name">Gateway<span class="brand__sub">Managed proxy</span></span>
+        </div>
+
+        <h1 id="auth-title">Sign in</h1>
+        <p class="auth__sub" id="auth-sub">Your keys, providers and usage for this gateway.</p>
+
+        <form class="auth__form" id="auth-form" novalidate>
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" autocomplete="username" placeholder="you@company.com" required />
+          </div>
+
+          <div class="field" id="invite-field" hidden>
+            <label for="invite-code">Invite code</label>
+            <input id="invite-code" name="invite-code" autocomplete="off" placeholder="inv-..." />
+          </div>
+
+          <div class="field">
+            <label for="password">Password</label>
+            <div class="secret">
+              <input type="password" id="password" name="password" autocomplete="current-password" placeholder="Your password" required />
+              <button type="button" class="secret__toggle" data-secret="password" aria-label="Show password">
+                <svg class="i-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1.8 12S5.6 4.8 12 4.8 22.2 12 22.2 12 18.4 19.2 12 19.2 1.8 12 1.8 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                <svg class="i-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" hidden><path d="M17.9 17.9A10 10 0 0 1 12 19.9C5.6 19.9 1.8 12 1.8 12a18.4 18.4 0 0 1 5-5.9M9.9 4.2A9.1 9.1 0 0 1 12 4c6.4 0 10.2 8 10.2 8a18.5 18.5 0 0 1-2.2 3.2m-6.7-1.1a3 3 0 1 1-4.2-4.2"/><path d="m2 2 20 20"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div id="auth-note" hidden></div>
+
+          <button type="submit" class="btn" id="auth-submit">
+            <span class="btn__spin" aria-hidden="true"></span>
+            <span id="auth-submit-text">Sign in</span>
+          </button>
+        </form>
+
+        <p class="auth__alt" id="auth-alt">
+          Have an invite code?
+          <button type="button" class="link" id="auth-switch">Create an account</button>
+        </p>
       </div>
-      <label for="email">Email</label>
-      <input type="email" id="email" autocomplete="username" placeholder="you@company.com" />
-      <div id="invite-field" class="hidden">
-        <label for="invite-code">Invite code</label>
-        <input id="invite-code" autocomplete="off" placeholder="inv-…" />
-      </div>
-      <label for="password">Password</label>
-      <div class="field-password">
-        <input type="password" id="password" autocomplete="current-password" placeholder="Your password" />
-        <button type="button" class="toggle-pw" data-target="password" aria-label="Show password">
-          <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg class="icon-hide hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </button>
-      </div>
-      <div class="btn-row">
-        <button type="button" class="btn btn-primary" id="login-btn">Sign in</button>
-        <button type="button" class="btn btn-secondary" id="signup-mode-btn">Use invite</button>
-        <button type="button" class="btn btn-primary hidden" id="signup-btn">Create account</button>
-        <button type="button" class="btn btn-secondary hidden" id="setup-btn">Create admin</button>
-      </div>
-      <p id="login-err" class="err hidden"></p>
     </div>
   </div>
 
-  <div id="app" class="app hidden">
-    <aside class="sidebar">
-      <div class="logo">Gateway</div>
-      <div class="tag">Managed proxy</div>
-      <div class="user-pill">
-        <span id="current-user-email" class="user-email"></span>
-        <span id="current-user-role" class="user-role"></span>
+  <!-- ------------------------------------------------------------- the app -->
+  <div id="app" class="shell" hidden>
+    <aside class="rail">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+          <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        </svg>
+        <span class="brand__name">Gateway<span class="brand__sub">Managed proxy</span></span>
       </div>
-      <button type="button" class="nav-btn active admin-only" data-panel="providers">Providers</button>
-      <button type="button" class="nav-btn admin-only" data-panel="subscriptions">Subscriptions</button>
-      <button type="button" class="nav-btn" data-panel="keys">API keys</button>
-      <button type="button" class="nav-btn" data-panel="usage">Usage</button>
-      <button type="button" class="nav-btn admin-only" data-panel="users">Users</button>
-      <!-- A page rather than a panel: it reads across every seat at once, which
-           is a different question from managing one of them. -->
-      <a class="nav-btn admin-only" href="/quota" style="text-decoration:none;display:block">Quota</a>
-      <div class="spacer"></div>
-      <button type="button" class="nav-btn" id="logout-btn">Sign out</button>
+
+      <div class="session">
+        <span class="session__who" id="me-email"></span>
+        <span class="badge badge--accent" id="me-role"></span>
+      </div>
+
+      <nav class="nav" aria-label="Sections">
+        <button type="button" class="nav__item admin-only" data-view="providers">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+          Providers
+        </button>
+        <button type="button" class="nav__item admin-only" data-view="subscriptions">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3 4 6.5v5c0 4.5 3.4 8.3 8 9.5 4.6-1.2 8-5 8-9.5v-5L12 3z"/><path d="m9 12 2 2 4-4"/></svg>
+          Subscriptions
+        </button>
+        <button type="button" class="nav__item" data-view="keys">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3.5M15.5 12v2.5"/></svg>
+          API keys
+        </button>
+        <button type="button" class="nav__item" data-view="usage">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M8 16v-4M12.5 16V8M17 16v-6"/></svg>
+          Usage
+        </button>
+        <button type="button" class="nav__item admin-only" data-view="users">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.5a3 3 0 0 1 0 5.6M17.5 19a5.4 5.4 0 0 0-2-4"/></svg>
+          Users
+        </button>
+        <a class="nav__item admin-only" href="/quota">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 21a9 9 0 1 1 9-9"/><path d="M12 7v5l3.5 2"/></svg>
+          Quota
+        </a>
+        <a class="nav__item" href="/docs">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6 3.5h9l3 3V20a.5.5 0 0 1-.5.5H6a.5.5 0 0 1-.5-.5V4a.5.5 0 0 1 .5-.5Z"/><path d="M9 12h6M9 15.5h6M9 8.5h3"/></svg>
+          Docs
+        </a>
+      </nav>
+
+      <div class="rail__spacer"></div>
+
+      <div class="rail__foot">
+        <button type="button" class="btn btn--quiet btn--icon" data-theme-toggle aria-label="Switch theme" title="Switch theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button type="button" class="btn btn--secondary" data-signout>Sign out</button>
+      </div>
     </aside>
-    <div class="main">
-      <div class="mobile-head">
-        <div>
-          <div class="logo" style="font-weight:700">Gateway</div>
-        </div>
-        <button type="button" class="btn btn-secondary" id="logout-mobile-btn">Sign out</button>
-        <div class="tabs">
-          <button type="button" class="active admin-only" data-panel="providers">Providers</button>
-          <button type="button" class="admin-only" data-panel="subscriptions">Subscriptions</button>
-          <button type="button" data-panel="keys">Keys</button>
-          <button type="button" data-panel="usage">Usage</button>
-          <button type="button" class="admin-only" data-panel="users">Users</button>
-        </div>
-      </div>
 
-      <section id="panel-providers" class="panel active">
-        <h2 class="page-title">Providers &amp; API Keys</h2>
-        <p class="section-lead">Add or update backend provider API keys. Search the catalog, fetch latest models, and configure routing prefixes.</p>
-        <div class="card">
-          <label>Search gateway providers <span id="catalog-count" class="muted"></span></label>
-          <div class="provider-pick">
-            <input type="text" id="provider-search" placeholder="Type to search 70+ providers…" autocomplete="off" />
-            <div id="provider-dropdown" class="provider-dropdown"></div>
-          </div>
-          <div class="grid-2">
-            <div>
-              <label for="p-id">Provider ID</label>
-              <input id="p-id" placeholder="openai" />
-            </div>
-            <div>
-              <label for="p-name">Display name</label>
-              <input id="p-name" placeholder="OpenAI" />
-            </div>
-          </div>
-          <label for="p-key">API key</label>
-          <div class="field-password">
-            <input id="p-key" type="password" autocomplete="off" placeholder="Provider secret key" />
-            <button type="button" class="toggle-pw" data-target="p-key" aria-label="Show API key">
-              <svg class="icon-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-              <svg class="icon-hide hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            </button>
-          </div>
-          <label for="p-models">Routing prefixes (JSON)</label>
-          <input id="p-models" placeholder='["gpt-","claude-"]' />
-          <div class="btn-row">
-            <button type="button" class="btn btn-blue" id="fetch-models-btn">Fetch latest models</button>
-            <button type="button" class="btn btn-primary" id="save-provider">Save provider</button>
-          </div>
-          <p id="fetch-status" class="muted hidden" style="margin-top:0.75rem;margin-bottom:0"></p>
-          <div id="model-preview" class="model-preview hidden"></div>
-        </div>
-        <div class="card">
-          <h2 class="page-title" style="font-size:1.1rem">Configured</h2>
-          <table>
-            <thead><tr><th>Provider</th><th>Prefixes</th><th>Models</th><th></th></tr></thead>
-            <tbody id="providers-tbody"></tbody>
-          </table>
-        </div>
-      </section>
+    <main class="content" id="main">
+      <div class="content__inner">
 
-      <section id="panel-subscriptions" class="panel admin-only">
-        <h2 class="page-title">Subscription accounts</h2>
-        <p class="section-lead">Serve requests from a ChatGPT, Claude, or Grok subscription instead of a metered API key. Sign in with the vendor's own CLI, then paste the credential JSON it wrote. Subscription providers are owner-only: only your own <code style="font-size:0.85em">sk-</code> keys can route to them, and each vendor serves only the API surface listed for it.</p>
-        <div class="card">
-          <h2 class="page-title" style="font-size:1.1rem">Connect an account</h2>
-          <label for="o-vendor">Vendor</label>
-          <select id="o-vendor"></select>
-          <p class="muted" id="o-vendor-note" style="margin:-0.5rem 0 1rem;font-size:0.8125rem"></p>
-          <div class="grid-2">
-            <div>
-              <label for="o-id">Provider ID</label>
-              <input id="o-id" placeholder="chatgpt-sub" autocomplete="off" />
+        <!-- --------------------------------------------------- providers -->
+        <section class="view admin-only" data-panel="providers" hidden>
+          <header class="bar">
+            <div class="bar__title">
+              <h1>Providers</h1>
+              <p>Metered API keys the gateway routes to. A request picks its provider by matching the model name against these routing prefixes.</p>
             </div>
-            <div>
-              <label for="o-name">Display name</label>
-              <input id="o-name" placeholder="ChatGPT Pro seat" autocomplete="off" />
+            <div class="bar__actions">
+              <button type="button" class="btn btn--quiet btn--icon only-narrow" data-theme-toggle aria-label="Switch theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="btn btn--secondary btn--sm only-narrow" data-signout>Sign out</button>
+            </div>
+          </header>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>Add a provider</h2>
+              <p>Pick one from the catalog to prefill its id and prefixes, or type your own.</p>
+            </div>
+
+            <div class="panel">
+              <div class="panel__body stack">
+                <div class="field combo">
+                  <label for="p-search">Search the catalog <span class="count" id="catalog-count">&mdash;</span></label>
+                  <input type="text" id="p-search" placeholder="OpenAI, Anthropic, Bedrock..." autocomplete="off"
+                         role="combobox" aria-expanded="false" aria-controls="p-list" aria-autocomplete="list" />
+                  <div class="combo__list" id="p-list" role="listbox" hidden></div>
+                </div>
+
+                <div class="cols cols--2">
+                  <div class="field">
+                    <label for="p-id">Provider id</label>
+                    <input id="p-id" placeholder="openai" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="p-name">Display name</label>
+                    <input id="p-name" placeholder="OpenAI" autocomplete="off" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="p-key">API key</label>
+                  <div class="secret">
+                    <input id="p-key" type="password" autocomplete="off" placeholder="Provider secret key" />
+                    <button type="button" class="secret__toggle" data-secret="p-key" aria-label="Show API key">
+                      <svg class="i-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M1.8 12S5.6 4.8 12 4.8 22.2 12 22.2 12 18.4 19.2 12 19.2 1.8 12 1.8 12z"/><circle cx="12" cy="12" r="3"/></svg>
+                      <svg class="i-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" hidden><path d="M17.9 17.9A10 10 0 0 1 12 19.9C5.6 19.9 1.8 12 1.8 12a18.4 18.4 0 0 1 5-5.9M9.9 4.2A9.1 9.1 0 0 1 12 4c6.4 0 10.2 8 10.2 8a18.5 18.5 0 0 1-2.2 3.2m-6.7-1.1a3 3 0 1 1-4.2-4.2"/><path d="m2 2 20 20"/></svg>
+                    </button>
+                  </div>
+                  <p class="field__hint">Encrypted with AES-256-GCM before it is stored, and never sent back to this page.</p>
+                </div>
+
+                <div class="field">
+                  <label for="p-models">Routing prefixes</label>
+                  <input id="p-models" placeholder='["gpt-", "o1-"]' autocomplete="off" />
+                  <p class="field__hint">A JSON array. Any model name starting with one of these routes here. Fetching the model list fills it in for you.</p>
+                </div>
+
+                <div id="p-note" hidden></div>
+                <pre id="p-preview" class="well mono" hidden></pre>
+              </div>
+              <div class="panel__foot">
+                <button type="button" class="btn" id="p-save"><span class="btn__spin"></span>Save provider</button>
+                <button type="button" class="btn btn--secondary" id="p-fetch"><span class="btn__spin"></span>Fetch model list</button>
+              </div>
             </div>
           </div>
-          <label for="o-models">Models to route (JSON) <span class="muted" style="font-weight:400">— optional</span></label>
-          <p class="muted" id="o-models-hint" style="margin:-0.25rem 0 0.5rem;font-size:0.8125rem"></p>
-          <input id="o-models" placeholder="leave blank to fetch from the vendor" autocomplete="off" />
-          <div id="o-import-block">
-            <label for="o-creds">Credentials JSON <span class="muted" id="o-cred-hint" style="font-weight:400"></span></label>
-            <textarea id="o-creds" rows="4" style="font-family:var(--mono);font-size:0.75rem" placeholder='Paste the credential file contents here'></textarea>
-            <div class="btn-row">
-              <button type="button" class="btn btn-primary" id="o-import-btn">Import credentials</button>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>Configured</h2>
+              <span class="count" id="providers-count">&mdash;</span>
+              <p>A provider in cooldown is skipped until its window passes or you reinstate it.</p>
+            </div>
+            <div class="records" id="providers-list"></div>
+          </div>
+        </section>
+
+        <!-- ----------------------------------------------- subscriptions -->
+        <section class="view admin-only" data-panel="subscriptions" hidden>
+          <header class="bar">
+            <div class="bar__title">
+              <h1>Subscriptions</h1>
+              <p>Serve requests from a ChatGPT, Claude, Grok, Antigravity or Kimi seat instead of a metered key. Owner-only: only your own <code>sk-</code> keys can route to these.</p>
+            </div>
+            <div class="bar__actions">
+              <a class="btn btn--secondary btn--sm" href="/quota">All quota</a>
+              <button type="button" class="btn btn--quiet btn--icon only-narrow" data-theme-toggle aria-label="Switch theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="btn btn--secondary btn--sm only-narrow" data-signout>Sign out</button>
+            </div>
+          </header>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>Connect an account</h2>
+              <p>Authorize in the browser, or paste the credential file the vendor's own CLI wrote.</p>
+            </div>
+
+            <div class="panel">
+              <div class="panel__body stack">
+                <div class="field">
+                  <label for="o-vendor">Vendor</label>
+                  <select id="o-vendor"></select>
+                  <p class="field__hint" id="o-vendor-note"></p>
+                </div>
+
+                <div class="cols cols--2">
+                  <div class="field">
+                    <label for="o-id">Provider id</label>
+                    <input id="o-id" placeholder="q1-a" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="o-name">Display name</label>
+                    <input id="o-name" placeholder="ChatGPT Pro seat" autocomplete="off" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="o-models">Models to route <span class="muted">optional</span></label>
+                  <input id="o-models" placeholder="leave blank to fetch from the vendor" autocomplete="off" />
+                  <p class="field__hint" id="o-models-hint"></p>
+                </div>
+
+                <div id="o-authz" class="stack" hidden>
+                  <div class="row">
+                    <button type="button" class="btn btn--accent" id="o-start"><span class="btn__spin"></span>Authorize in browser</button>
+                  </div>
+
+                  <div id="o-step2" class="well stack" hidden>
+                    <div id="o-catch-step" class="field" hidden>
+                      <label>0 &middot; Auto-complete this (optional, recommended)</label>
+                      <p class="field__hint">Run this in a terminal <strong>before</strong> approving in step 1. It catches the vendor's redirect and finishes the connection here automatically &mdash; skip step 2 entirely.</p>
+                      <div class="row">
+                        <code class="mono" id="o-catch-cmd" style="flex:1;padding:0.55rem 0.7rem;border:1px solid var(--line);border-radius:var(--r-2);background:var(--surface-2);word-break:break-all"></code>
+                        <button type="button" class="btn btn--secondary btn--sm" id="o-catch-copy">Copy</button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <p class="label">1 &middot; Approve the request</p>
+                      <p><a id="o-authz-url" href="#" target="_blank" rel="noopener" class="mono" style="font-size:var(--t--2);word-break:break-all"></a></p>
+                    </div>
+
+                    <div id="o-paste-step" class="field" hidden>
+                      <label for="o-code">2 &middot; Paste the address you land on</label>
+                      <p class="field__hint">Only needed if you skipped step 0. You will land on a <code>localhost</code> page that cannot be reached &mdash; that is expected, nothing is listening there. Copy the whole address bar and paste it below.</p>
+                      <input id="o-code" placeholder="http://localhost:54545/callback?code=..." autocomplete="off" />
+                      <div class="row" style="margin-top:var(--s-2)">
+                        <button type="button" class="btn" id="o-complete"><span class="btn__spin"></span>Complete connection</button>
+                      </div>
+                    </div>
+
+                    <div id="o-device-step" hidden>
+                      <p class="label">2 &middot; Enter this code on that page</p>
+                      <p id="o-device-code" class="mono" style="font-size:var(--t-3);letter-spacing:0.14em;font-weight:600"></p>
+                      <p class="muted" id="o-device-wait">Waiting for you to approve&hellip;</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="o-import" class="stack" hidden>
+                  <div class="field">
+                    <label for="o-creds">Credentials JSON <span class="muted" id="o-cred-hint"></span></label>
+                    <textarea id="o-creds" rows="4" placeholder="Paste the credential file contents"></textarea>
+                  </div>
+                  <div class="row">
+                    <button type="button" class="btn btn--secondary" id="o-import-btn"><span class="btn__spin"></span>Import credentials</button>
+                  </div>
+                </div>
+
+                <div id="o-note" hidden></div>
+              </div>
             </div>
           </div>
-          <div id="o-authz-block" class="hidden">
-            <div class="btn-row" style="margin-bottom:0.75rem">
-              <button type="button" class="btn btn-blue" id="o-start-btn">Start browser authorization</button>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>Connected</h2>
+              <span class="count" id="oauth-count">&mdash;</span>
+              <p>Limits are read live from each vendor. This is the seat's own quota, not what this gateway spent.</p>
             </div>
-            <div id="o-authz-step2" class="hidden">
-              <p class="ok-msg" style="margin:0 0 0.35rem">1. Open the authorization page and approve:</p>
-              <p style="margin:0 0 1rem"><a id="o-authz-url" href="#" target="_blank" rel="noopener" style="font-size:0.8rem;word-break:break-all;color:var(--blue)"></a></p>
-              <div id="o-paste-step">
-                <label for="o-code">2. Paste the URL you land on</label>
-                <p class="muted" style="margin:-0.25rem 0 0.5rem;font-size:0.8125rem">You will land on a <code style="font-size:0.85em">localhost</code> page that says it can't be reached — that is expected, nothing is listening there. Copy the whole address from your browser's address bar and paste it below.</p>
-                <input id="o-code" placeholder="http://localhost:54545/callback?code=…&amp;state=… (or just the code)" autocomplete="off" />
-                <div class="btn-row">
-                  <button type="button" class="btn btn-primary" id="o-complete-btn">Complete connection</button>
+            <div class="records" id="oauth-list"></div>
+          </div>
+        </section>
+
+        <!-- -------------------------------------------------------- keys -->
+        <section class="view" data-panel="keys" hidden>
+          <header class="bar">
+            <div class="bar__title">
+              <h1>API keys</h1>
+              <p>What your apps send as <code>Authorization: Bearer sk-...</code>. Only a hash is stored, so a key is shown once and never again.</p>
+            </div>
+            <div class="bar__actions">
+              <button type="button" class="btn btn--quiet btn--icon only-narrow" data-theme-toggle aria-label="Switch theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="btn btn--secondary btn--sm only-narrow" data-signout>Sign out</button>
+            </div>
+          </header>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>New key</h2>
+            </div>
+            <div class="panel">
+              <div class="panel__body">
+                <div class="cols cols--3">
+                  <div class="field">
+                    <label for="k-label">Label</label>
+                    <input id="k-label" placeholder="production worker" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="k-rpm">Requests per minute</label>
+                    <input id="k-rpm" type="number" min="1" placeholder="no limit" />
+                  </div>
+                  <div class="field">
+                    <label for="k-tokens">Tokens per month</label>
+                    <input id="k-tokens" type="number" min="1" placeholder="no limit" />
+                  </div>
+                </div>
+                <div id="k-reveal" class="secret-reveal" style="margin-top:var(--s-4)" hidden>
+                  <div>
+                    <strong>Copy this now.</strong>
+                    <span class="muted">It is hashed on the server and cannot be shown again.</span>
+                  </div>
+                  <code id="k-reveal-text"></code>
+                  <div class="row">
+                    <button type="button" class="btn btn--sm" data-copy="k-reveal-text">Copy key</button>
+                    <button type="button" class="btn btn--quiet btn--sm" data-dismiss="k-reveal">Done</button>
+                  </div>
                 </div>
               </div>
-              <div id="o-device-step" class="hidden">
-                <label>2. Enter this code on that page</label>
-                <p id="o-device-code" style="margin:0 0 0.5rem;font-family:var(--mono);font-size:1.5rem;letter-spacing:0.15em;font-weight:600"></p>
-                <p class="muted" id="o-device-wait" style="margin:0;font-size:0.8125rem">Waiting for you to approve…</p>
+              <div class="panel__foot">
+                <button type="button" class="btn" id="k-create"><span class="btn__spin"></span>Create key</button>
+                <span class="muted" id="k-limit-note"></span>
               </div>
             </div>
           </div>
-          <p id="o-status" class="muted hidden" style="margin-top:0.75rem;margin-bottom:0"></p>
-        </div>
-        <div class="card">
-          <h2 class="page-title" style="font-size:1.1rem">Connected</h2>
-          <p class="muted" style="margin:-0.5rem 0 1rem;font-size:0.8125rem">Limits are read live from each vendor — this is the seat's own quota, not what this gateway spent.</p>
-          <table>
-            <thead><tr><th>Account</th><th>Token expires</th><th>Models</th><th></th></tr></thead>
-            <tbody id="oauth-tbody"></tbody>
-          </table>
-        </div>
-      </section>
 
-      <section id="panel-keys" class="panel">
-        <h2 class="page-title">User API keys</h2>
-        <p class="section-lead">Keys your apps use with <code style="font-size:0.85em">Authorization: Bearer sk-…</code></p>
-        <div class="card">
-          <div class="grid-2" style="margin-bottom:0">
-            <input id="k-label" placeholder="Label" aria-label="Label" />
-            <div class="grid-2">
-              <input id="k-rpm" type="number" placeholder="RPM limit" aria-label="RPM" />
-              <input id="k-tokens" type="number" placeholder="Monthly tokens" aria-label="Tokens" />
+          <div class="section">
+            <div class="section__head">
+              <h2>Active keys</h2>
+              <span class="count" id="keys-count">&mdash;</span>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Key</th>
+                    <th>Label</th>
+                    <th>Requests, last minute</th>
+                    <th>Tokens, this month</th>
+                    <th><span class="sr">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody id="keys-body"></tbody>
+              </table>
             </div>
           </div>
-          <button type="button" class="btn btn-primary" id="create-key" style="margin-top:1rem">Create key</button>
-          <div id="new-key-box" class="key-box hidden">
-            <span class="ok-msg">Copy now — shown once</span>
-            <code id="new-key-text"></code>
-            <button type="button" class="btn btn-secondary" id="copy-key-btn">Copy</button>
-          </div>
-        </div>
-        <div class="card">
-          <table>
-            <thead><tr><th>Key</th><th>Label</th><th>Requests</th><th>Tokens</th><th></th></tr></thead>
-            <tbody id="keys-tbody"></tbody>
-          </table>
-        </div>
-      </section>
+        </section>
 
-      <section id="panel-users" class="panel admin-only">
-        <h2 class="page-title">Users & invites</h2>
-        <p class="section-lead">Create invite codes for users. Invite codes are shown once.</p>
-        <div class="card">
-          <div class="grid-2" style="margin-bottom:0">
-            <input id="invite-label" placeholder="Invite label" aria-label="Invite label" />
-            <input id="invite-max" type="number" min="1" max="1000" value="1" placeholder="Max uses" aria-label="Max uses" />
-          </div>
-          <button type="button" class="btn btn-primary" id="create-invite" style="margin-top:1rem">Create invite</button>
-          <div id="new-invite-box" class="key-box hidden">
-            <span class="ok-msg">Copy now — shown once</span>
-
-            <div style="margin:0.5rem 0 0.25rem">
-              <div class="muted" style="font-size:0.75rem">Invite code</div>
-              <code id="new-invite-text"></code>
-              <button type="button" class="btn btn-secondary" id="copy-invite-btn">Copy code</button>
+        <!-- ------------------------------------------------------- usage -->
+        <section class="view" data-panel="usage" hidden>
+          <header class="bar">
+            <div class="bar__title">
+              <h1>Usage</h1>
+              <p>Everything proxied through this gateway, failures included.</p>
             </div>
+            <div class="bar__actions">
+              <select id="usage-days" aria-label="Period">
+                <option value="7">Last 7 days</option>
+                <option value="30" selected>Last 30 days</option>
+                <option value="90">Last 90 days</option>
+              </select>
+              <button type="button" class="btn btn--secondary btn--sm" id="usage-refresh"><span class="btn__spin"></span>Refresh</button>
+              <button type="button" class="btn btn--quiet btn--icon only-narrow" data-theme-toggle aria-label="Switch theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="btn btn--secondary btn--sm only-narrow" data-signout>Sign out</button>
+            </div>
+          </header>
 
-            <div>
-              <div class="muted" style="font-size:0.75rem">Invite link (share this)</div>
-              <code id="new-invite-url" style="word-break:break-all"></code>
-              <button type="button" class="btn btn-secondary" id="copy-invite-url-btn">Copy link</button>
+          <div class="section">
+            <div class="panel">
+              <div class="panel__body stack">
+                <div class="figures" id="usage-figures"></div>
+                <div>
+                  <p class="muted" style="margin-bottom:var(--s-2)">Requests per day</p>
+                  <div class="chart" id="usage-chart"></div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
-        <div class="grid-2">
-          <div class="card">
-            <h2 class="page-title" style="font-size:1.1rem">Users</h2>
-            <table><thead><tr><th>Email</th><th>Role</th><th>Active</th><th></th></tr></thead><tbody id="users-tbody"></tbody></table>
-          </div>
-          <div class="card">
-            <h2 class="page-title" style="font-size:1.1rem">Invites</h2>
-            <table><thead><tr><th>Label</th><th>Used</th><th></th></tr></thead><tbody id="invites-tbody"></tbody></table>
-          </div>
-        </div>
-      </section>
 
-      <section id="panel-usage" class="panel">
-        <h2 class="page-title">Usage</h2>
-        <div class="card">
-          <div class="btn-row" style="margin-bottom:1rem">
-            <select id="usage-days" aria-label="Period" style="width:auto;margin:0">
-              <option value="7">7 days</option>
-              <option value="30" selected>30 days</option>
-              <option value="90">90 days</option>
-            </select>
-            <button type="button" class="btn btn-secondary" id="refresh-usage">Refresh</button>
+          <div class="section">
+            <div class="section__head">
+              <h2>Where it went</h2>
+            </div>
+            <div class="cols cols--3">
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Provider</th><th class="num">Req</th><th class="num">Tokens</th></tr></thead>
+                  <tbody id="usage-providers"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Key</th><th class="num">Req</th><th class="num">Tokens</th></tr></thead>
+                  <tbody id="usage-keys"></tbody>
+                </table>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead><tr><th>Model</th><th class="num">Req</th></tr></thead>
+                  <tbody id="usage-models"></tbody>
+                </table>
+              </div>
+            </div>
           </div>
-          <div class="stats" id="usage-stats"></div>
-          <p class="muted" style="margin:0 0 0.5rem;font-size:0.75rem">Daily requests</p>
-          <div class="chart" id="usage-chart"></div>
-          <div class="grid-2">
-            <table><thead><tr><th>Provider</th><th class="num">Req</th><th class="num">Tok</th></tr></thead><tbody id="usage-by-provider"></tbody></table>
-            <table><thead><tr><th>Key</th><th class="num">Req</th><th class="num">Tok</th></tr></thead><tbody id="usage-by-key"></tbody></table>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>Recent requests</h2>
+              <p>Where an upstream error is recorded. The totals above cannot show you one.</p>
+              <div class="row">
+                <select id="logs-filter" aria-label="Outcome">
+                  <option value="all">All requests</option>
+                  <option value="error">Failures only</option>
+                </select>
+                <button type="button" class="btn btn--secondary btn--sm" id="logs-refresh"><span class="btn__spin"></span>Refresh</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>When</th><th>Model</th><th>Provider</th><th>Outcome</th><th class="num">Tokens</th><th class="num">ms</th></tr>
+                </thead>
+                <tbody id="logs-body"></tbody>
+              </table>
+            </div>
           </div>
-          <table style="margin-top:1rem"><thead><tr><th>Model</th><th>Provider</th><th class="num">Req</th></tr></thead><tbody id="usage-by-model"></tbody></table>
-        </div>
-        <div class="card">
-          <h2 class="page-title" style="font-size:1.1rem">Recent requests</h2>
-          <p class="muted" style="margin:-0.5rem 0 1rem;font-size:0.8125rem">Every proxied request, failures included. This is where an upstream error is recorded — the totals above cannot show one.</p>
-          <div class="btn-row" style="margin-bottom:1rem">
-            <select id="logs-filter" aria-label="Outcome" style="width:auto;margin:0">
-              <option value="all">All requests</option>
-              <option value="error">Failures only</option>
-            </select>
-            <button type="button" class="btn btn-secondary" id="refresh-logs">Refresh</button>
+        </section>
+
+        <!-- ------------------------------------------------------- users -->
+        <section class="view admin-only" data-panel="users" hidden>
+          <header class="bar">
+            <div class="bar__title">
+              <h1>Users</h1>
+              <p>An invite is the only way in. Each is shown once and can be spent up to its limit.</p>
+            </div>
+            <div class="bar__actions">
+              <button type="button" class="btn btn--quiet btn--icon only-narrow" data-theme-toggle aria-label="Switch theme">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button type="button" class="btn btn--secondary btn--sm only-narrow" data-signout>Sign out</button>
+            </div>
+          </header>
+
+          <div class="section">
+            <div class="section__head">
+              <h2>New invite</h2>
+            </div>
+            <div class="panel">
+              <div class="panel__body">
+                <div class="cols cols--2">
+                  <div class="field">
+                    <label for="invite-label">Label</label>
+                    <input id="invite-label" placeholder="who it is for" autocomplete="off" />
+                  </div>
+                  <div class="field">
+                    <label for="invite-max">Maximum uses</label>
+                    <input id="invite-max" type="number" min="1" max="1000" value="1" />
+                  </div>
+                </div>
+                <div id="i-reveal" class="secret-reveal" style="margin-top:var(--s-4)" hidden>
+                  <div><strong>Copy this now.</strong> <span class="muted">The code is not shown again.</span></div>
+                  <div class="field">
+                    <span class="label">Invite code</span>
+                    <code id="i-reveal-code"></code>
+                  </div>
+                  <div class="field">
+                    <span class="label">Invite link</span>
+                    <code id="i-reveal-url"></code>
+                  </div>
+                  <div class="row">
+                    <button type="button" class="btn btn--sm" data-copy="i-reveal-url">Copy link</button>
+                    <button type="button" class="btn btn--secondary btn--sm" data-copy="i-reveal-code">Copy code</button>
+                    <button type="button" class="btn btn--quiet btn--sm" data-dismiss="i-reveal">Done</button>
+                  </div>
+                </div>
+              </div>
+              <div class="panel__foot">
+                <button type="button" class="btn" id="i-create"><span class="btn__spin"></span>Create invite</button>
+              </div>
+            </div>
           </div>
-          <div style="overflow-x:auto">
-            <table>
-              <thead><tr><th>When</th><th>Model</th><th>Provider</th><th>Outcome</th><th class="num">Tok</th><th class="num">ms</th></tr></thead>
-              <tbody id="logs-tbody"></tbody>
-            </table>
+
+          <div class="section">
+            <div class="cols cols--2">
+              <div>
+                <div class="section__head"><h2>People</h2><span class="count" id="users-count">&mdash;</span></div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Email</th><th>Role</th><th><span class="sr">Actions</span></th></tr></thead>
+                    <tbody id="users-body"></tbody>
+                  </table>
+                </div>
+              </div>
+              <div>
+                <div class="section__head"><h2>Invites</h2><span class="count" id="invites-count">&mdash;</span></div>
+                <div class="table-wrap">
+                  <table>
+                    <thead><tr><th>Label</th><th>Used</th><th><span class="sr">Actions</span></th></tr></thead>
+                    <tbody id="invites-body"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
-    </div>
+        </section>
+
+      </div>
+    </main>
   </div>
 
-  <script>
-    const $ = (id) => document.getElementById(id);
-    let catalog = [];
-    let currentUser = null;
-    let signupMode = false;
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
 
-    document.querySelectorAll('.toggle-pw').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const input = $(btn.dataset.target);
-        if (!input) return;
-        const show = input.type === 'password';
-        input.type = show ? 'text' : 'password';
-        btn.querySelector('.icon-show')?.classList.toggle('hidden', show);
-        btn.querySelector('.icon-hide')?.classList.toggle('hidden', !show);
-      });
+  <script>
+  (function () {
+    'use strict';
+
+    /* ------------------------------------------------------------- theme */
+    /* The OS preference decides until someone says otherwise; after that,
+       their choice is what persists. */
+    var savedTheme = null;
+    try { savedTheme = localStorage.getItem('gw-theme'); } catch (e) { /* private mode */ }
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function applyTheme(mode) {
+      document.documentElement.dataset.theme = mode === 'dark' ? 'dark' : 'light';
+    }
+    applyTheme(savedTheme || (darkQuery.matches ? 'dark' : 'light'));
+    darkQuery.addEventListener('change', function (e) {
+      if (!savedTheme) applyTheme(e.matches ? 'dark' : 'light');
     });
 
-    async function api(path, opts = {}) {
-      const r = await fetch('/admin' + path, { credentials: 'include', headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) }, ...opts });
-      const data = await r.json().catch(() => ({}));
+    /* ----------------------------------------------------------- helpers */
+    function $(id) { return document.getElementById(id); }
+    function all(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+
+    /* Vendor account names, plan labels and upstream error text are not ours,
+       so nothing interpolated into markup goes in unescaped. */
+    function esc(value) {
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+      });
+    }
+
+    function fmt(n) {
+      var x = Number(n) || 0;
+      if (x >= 1e6) return (x / 1e6).toFixed(1) + 'M';
+      if (x >= 1e3) return (x / 1e3).toFixed(1) + 'k';
+      return String(x);
+    }
+
+    async function api(path, opts) {
+      opts = opts || {};
+      var r = await fetch('/admin' + path, Object.assign({
+        credentials: 'include',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {}),
+      }, opts));
+      var data = await r.json().catch(function () { return {}; });
       if (!r.ok) {
-        const err = new Error(data.message || data.error || r.statusText);
+        var err = new Error(data.message || data.error || r.statusText);
         // Callers that can offer a resolution (409 conflicts) need the code.
         err.status = r.status;
         throw err;
@@ -682,526 +612,145 @@
       return data;
     }
 
-    // Values that reach this page from a vendor (account emails, plan labels)
-    // are not ours, so nothing interpolated into HTML goes in unescaped.
-    function esc(value) {
-      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      })[ch]);
+    function toast(message, tone) {
+      var el = document.createElement('div');
+      el.className = 'toast';
+      if (tone) el.dataset.tone = tone;
+      el.innerHTML = '<span>' + esc(message) + '</span>' +
+        '<button type="button" class="toast__close" aria-label="Dismiss">&times;</button>';
+      var close = function () { el.remove(); };
+      el.querySelector('.toast__close').onclick = close;
+      $('toasts').appendChild(el);
+      setTimeout(close, tone === 'bad' ? 9000 : 5000);
     }
 
-    function showPanel(name) {
-      if ((name === 'providers' || name === 'users' || name === 'subscriptions') && currentUser?.role !== 'admin') name = 'keys';
-      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-      document.querySelectorAll('[data-panel]').forEach((b) => b.classList.toggle('active', b.dataset.panel === name));
-      $('panel-' + name)?.classList.add('active');
+    function busy(btn, on) {
+      if (!btn) return;
+      btn.dataset.busy = on ? 'true' : 'false';
+      if (on) btn.setAttribute('aria-busy', 'true'); else btn.removeAttribute('aria-busy');
     }
 
-    function applyRoleUI() {
-      const isAdmin = currentUser?.role === 'admin';
-      document.querySelectorAll('.admin-only').forEach((el) => el.classList.toggle('hidden', !isAdmin));
-      $('k-rpm').disabled = !isAdmin;
-      $('k-tokens').disabled = !isAdmin;
-      if (!isAdmin) {
-        $('k-rpm').placeholder = 'Set by admin';
-        $('k-tokens').placeholder = 'Set by admin';
-      }
-      if (currentUser) {
-        $('current-user-email').textContent = currentUser.email;
-        $('current-user-role').textContent = currentUser.role;
-      }
-      showPanel(isAdmin ? 'providers' : 'keys');
+    /** Run an async action with the button showing it is working. */
+    async function run(btn, fn) {
+      busy(btn, true);
+      try { return await fn(); } finally { busy(btn, false); }
     }
 
-    function setSignupMode(on) {
-      signupMode = on;
-      $('invite-field').classList.toggle('hidden', !on);
-      $('signup-btn').classList.toggle('hidden', !on);
-      $('login-btn').classList.toggle('hidden', on);
-      $('signup-mode-btn').textContent = on ? 'Back to sign in' : 'Use invite';
-      $('login-title').textContent = on ? 'Create account' : 'Sign in';
-      $('login-sub').textContent = on ? 'Use your invite code to create a user account.' : 'Sign in or create an invited user account.';
-    }
-
-    document.querySelectorAll('[data-panel]').forEach((el) => el.addEventListener('click', () => showPanel(el.dataset.panel)));
-    $('signup-mode-btn').onclick = () => setSignupMode(!signupMode);
-
-    function selectProvider(p) {
-      $('p-id').value = p.id;
-      $('p-name').value = p.name;
-      $('p-models').value = JSON.stringify(p.defaultPrefixes || []);
-      $('provider-search').value = p.name + ' (' + p.id + ')';
-      $('provider-dropdown').classList.remove('open');
-    }
-
-    function renderProviderDropdown(filter) {
-      const q = (filter || '').toLowerCase();
-      const list = catalog.filter((p) => !q || p.id.includes(q) || p.name.toLowerCase().includes(q)).slice(0, 40);
-      const dd = $('provider-dropdown');
-      dd.innerHTML = list.map((p) =>
-        `<div class="provider-opt" data-id="${p.id}">
-          <strong>${p.name}</strong>
-          <span>${p.id}</span>
-          ${p.supportsLiveModels ? '<span class="badge badge-live">Live models</span>' : '<span class="badge badge-manual">Manual prefixes</span>'}
-        </div>`
-      ).join('') || '<div class="provider-opt muted">No match</div>';
-      dd.querySelectorAll('.provider-opt[data-id]').forEach((el) => {
-        el.onclick = () => selectProvider(catalog.find((x) => x.id === el.dataset.id));
-      });
-    }
-
-    async function loadCatalog() {
-      if (currentUser?.role !== 'admin') return;
-      const { presets } = await api('/provider-presets');
-      catalog = presets || [];
-      $('catalog-count').textContent = '(' + catalog.length + ' in gateway)';
-      renderProviderDropdown('');
-    }
-
-    $('provider-search').addEventListener('focus', () => {
-      $('provider-dropdown').classList.add('open');
-      renderProviderDropdown($('provider-search').value);
-    });
-    $('provider-search').addEventListener('input', () => renderProviderDropdown($('provider-search').value));
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.provider-pick')) $('provider-dropdown').classList.remove('open');
-    });
-
-    $('fetch-models-btn').onclick = async () => {
-      const id = $('p-id').value.trim();
-      const key = $('p-key').value.trim();
-      if (!id || !key) {
-        $('fetch-status').textContent = 'Enter provider ID and API key first.';
-        $('fetch-status').classList.remove('hidden');
-        return;
-      }
-      $('fetch-status').textContent = 'Fetching from provider API…';
-      $('fetch-status').classList.remove('hidden');
-      $('model-preview').classList.add('hidden');
-      try {
-        const data = await api('/providers/fetch-models', { method: 'POST', body: JSON.stringify({ provider_id: id, api_key: key }) });
-        if (data.suggested_prefixes?.length) $('p-models').value = JSON.stringify(data.suggested_prefixes);
-        const n = (data.models || []).length;
-        $('fetch-status').textContent = data.error ? data.error : `Loaded ${n} models — prefixes updated.`;
-        $('fetch-status').className = data.error ? 'err' : 'ok-msg';
-        if (n) {
-          $('model-preview').textContent = data.models.map((m) => m.id).join('\n');
-          $('model-preview').classList.remove('hidden');
-        }
-      } catch (e) {
-        $('fetch-status').textContent = e.message;
-        $('fetch-status').className = 'err';
-      }
-    };
-
-    // Users, for assigning provider ownership. Loaded once per visit alongside
-    // the Users panel and reused here rather than fetched per row.
-    let knownUsers = [];
-
-    /** Who a metered provider bills to: everyone, or one named account. */
-    function ownerCell(p) {
-      const label = p.owner_only && p.owner_user_id
-        ? esc(p.owner_email || ('user ' + p.owner_user_id))
-        : 'shared';
-      return `<span class="muted" style="font-size:0.7rem">Bills to ${label}</span> · <button type="button" class="linkish" data-owner="${esc(p.id)}">Change</button>`;
-    }
-
-    async function refreshProviders() {
-      if (currentUser?.role !== 'admin') return;
-      const { providers } = await api('/providers');
-      const tb = $('providers-tbody');
-      if (!providers.length) {
-        tb.innerHTML = '<tr><td colspan="4" class="muted">No providers yet.</td></tr>';
-        return;
-      }
-      tb.innerHTML = providers.map((p) =>
-        `<tr>
-          <td><strong>${esc(p.name)}</strong>${p.auth_type === 'oauth' ? '<span class="badge badge-live">Subscription</span>' : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)}</span>${healthBadges({ ...p, routable: true })}</td>
-          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}</td>
-          <td>${p.auth_type === 'oauth'
-            ? '<span class="muted" style="font-size:0.75rem">Managed in Subscriptions</span>'
-            : `<button type="button" class="linkish" data-sync="${esc(p.id)}">Sync models</button><br>${ownerCell(p)}`}</td>
-          <td style="white-space:nowrap">${p.cooling_down || !p.is_active ? `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-reinstate="${esc(p.id)}">Reinstate</button>` : ''}
-          <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-del="${esc(p.id)}">Remove</button></td>
-        </tr>`
-      ).join('');
-      tb.querySelectorAll('[data-owner]').forEach((btn) => {
-        btn.onclick = async () => {
-          const options = knownUsers.map((u) => `${u.id} = ${u.email}`).join('\n');
-          const answer = prompt(
-            'Which account does this provider bill to?\n\nBlank = shared with everyone.\n\n' + options,
-            ''
-          );
-          if (answer === null) return;
-          const trimmed = answer.trim();
-          const userId = trimmed === '' ? null : Number(trimmed);
-          if (userId !== null && !Number.isInteger(userId)) {
-            alert('Enter a user id from the list, or leave blank to share it.');
-            return;
-          }
-          try {
-            await api('/providers/' + btn.dataset.owner + '/owner', {
-              method: 'POST',
-              body: JSON.stringify({ user_id: userId }),
-            });
-          } catch (e) { alert(e.message); return; }
-          await refreshProviders();
-        };
-      });
-      tb.querySelectorAll('[data-reinstate]').forEach((btn) => {
-        btn.onclick = async () => {
-          btn.textContent = '…';
-          try {
-            await api('/providers/' + btn.dataset.reinstate + '/reinstate', { method: 'POST' });
-          } catch (e) {
-            alert(e.message);
-          }
-          await refreshProviders();
-        };
-      });
-      tb.querySelectorAll('[data-del]').forEach((btn) => {
-        btn.onclick = async () => {
-          if (!confirm('Remove ' + btn.dataset.del + '?')) return;
-          try {
-            await api('/providers/' + btn.dataset.del, { method: 'DELETE' });
-          } catch (e) {
-            alert(e.message);
-            return;
-          }
-          await refreshProviders();
-        };
-      });
-      tb.querySelectorAll('[data-sync]').forEach((btn) => {
-        btn.onclick = async () => {
-          btn.textContent = '…';
-          try {
-            const r = await api('/providers/' + btn.dataset.sync + '/sync-models', { method: 'POST' });
-            btn.textContent = r.model_count + ' models';
-            await refreshProviders();
-          } catch (e) {
-            btn.textContent = 'Failed';
-            alert(e.message);
-          }
-        };
-      });
+    function note(el, message, tone) {
+      if (!el) return;
+      if (!message) { el.hidden = true; el.innerHTML = ''; return; }
+      el.className = 'note' + (tone ? ' note--' + tone : '');
+      el.innerHTML = esc(message);
+      el.hidden = false;
     }
 
     /**
-     * A key's consumption against one of its limits.
+     * Second click confirms.
      *
-     * Rendered even when no limit is set, because "142k used, no cap" is still
-     * the thing the owner wants to know; the meter only appears when there is a
-     * ceiling for it to be a fraction of.
+     * A native confirm() takes the whole window to ask one question and gives
+     * no clue which row it is about. This keeps the question on the control
+     * that does the damage, and forgets it again if you walk away.
      */
-    function limitCell(used, limit) {
-      const u = Number(used) || 0;
-      if (limit == null) return `${fmt(u)} <span class="muted">/ no cap</span>`;
-      const pct = limit > 0 ? Math.min(100, (u / limit) * 100) : 0;
-      return `<div>${fmt(u)} <span class="muted">/ ${fmt(limit)}</span></div>
-        <div class="meter-track" style="margin-top:0.25rem"><div class="meter-fill${meterTone(pct)}" style="width:${pct}%"></div></div>`;
-    }
-
-    async function refreshKeys() {
-      const { api_keys } = await api('/api-keys');
-      const active = api_keys.filter((k) => k.is_active);
-      const tb = $('keys-tbody');
-      if (!active.length) {
-        tb.innerHTML = '<tr><td colspan="5" class="muted">No keys.</td></tr>';
-        return;
-      }
-      tb.innerHTML = active.map((k) =>
-        `<tr><td style="font-family:var(--mono)">${esc(k.key_prefix)}…</td><td>${esc(k.label) || '—'}${k.user_email && currentUser?.role === 'admin' ? '<br><span class="muted">' + esc(k.user_email) + '</span>' : ''}</td>
-        <td style="min-width:7rem">${limitCell(k.last_minute_requests, k.rpm_limit)}<div class="muted" style="font-size:0.7rem">last minute</div></td>
-        <td style="min-width:7rem">${limitCell(k.month_tokens, k.monthly_token_limit)}<div class="muted" style="font-size:0.7rem">tokens this month</div></td>
-        <td><button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-rev="${k.id}">Revoke</button></td></tr>`
-      ).join('');
-      tb.querySelectorAll('[data-rev]').forEach((btn) => {
-        btn.onclick = async () => {
-          if (!confirm('Revoke?')) return;
-          await api('/api-keys/' + btn.dataset.rev, { method: 'DELETE' });
-          await refreshKeys();
-        };
-      });
-    }
-
-    /* ---- Subscriptions (OAuth) ---- */
-    let oauthVendors = [];
-    let oauthState = null;
-    // Set when the admin confirms converting an existing API-key provider. It
-    // has to survive from /start through /complete: the state is single-use, so
-    // re-answering the prompt after the vendor round trip is not possible.
-    let oauthOverwrite = false;
-
-    function parseJsonField(value, label) {
-      const raw = value.trim();
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) throw new Error(label + ' must be a JSON array');
-      return parsed;
-    }
-
-    function oauthInputs() {
-      const providerId = $('o-id').value.trim().toLowerCase();
-      if (!providerId) throw new Error('Provider ID is required');
-      return {
-        vendor: $('o-vendor').value,
-        provider_id: providerId,
-        provider_name: $('o-name').value.trim(),
-        models: parseJsonField($('o-models').value, 'Models'),
+    function confirmable(btn, label, fn) {
+      var original = btn.textContent;
+      var timer = null;
+      var reset = function () {
+        btn.dataset.armed = 'false';
+        btn.textContent = original;
+        clearTimeout(timer);
+        timer = null;
       };
+      btn.onclick = function () {
+        if (btn.dataset.armed === 'true') { reset(); fn(btn); return; }
+        btn.dataset.armed = 'true';
+        btn.textContent = label || 'Confirm?';
+        timer = setTimeout(reset, 4000);
+      };
+      btn.onblur = function () { if (timer) reset(); };
     }
 
-    function oauthStatus(msg, isErr) {
-      const el = $('o-status');
-      el.textContent = msg;
-      el.className = isErr ? 'err' : 'ok-msg';
+    function tone(pct) {
+      if (pct == null) return 'none';
+      if (pct >= 90) return 'crit';
+      if (pct >= 75) return 'warn';
+      return 'ok';
     }
 
-    /* Fields the vendor suggests, and what it last suggested for each. A field
-       still holding the previous suggestion is untouched by the operator, so it
-       follows the vendor; anything else is their own text and is left alone. */
-    const suggestedValues = {};
-
-    function setSuggested(fieldId, value) {
-      const el = $(fieldId);
-      const current = el.value.trim();
-      if (!current || current === suggestedValues[fieldId]) el.value = value;
-      suggestedValues[fieldId] = value;
+    /* Meters render at zero width and are filled on the next frame, so the bar
+       arrives as a measurement rather than sitting there as a static image. */
+    function meter(pct, extraClass) {
+      var t = tone(pct);
+      return '<div class="meter' + (extraClass ? ' ' + extraClass : '') + '">' +
+        '<div class="meter__fill" data-tone="' + t + '" data-pct="' + (pct == null ? 0 : pct) + '"' +
+        ' role="progressbar" aria-valuemin="0" aria-valuemax="100"' +
+        (pct == null ? ' aria-valuetext="not reported"' : ' aria-valuenow="' + Math.round(pct) + '"') +
+        '></div></div>';
     }
 
-    function suggestedProviderId(v) {
-      if (v.id === 'openai-codex') return 'chatgpt-sub';
-      if (v.id === 'anthropic-claude-code') return 'claude-sub';
-      if (v.id === 'xai-grok-cli') return 'grok-sub';
-      if (v.id === 'google-antigravity') return 'antigravity-sub';
-      if (v.id === 'kimi-code') return 'kimi-sub';
-      return v.id;
+    function paintMeters(root) {
+      requestAnimationFrame(function () {
+        all('.meter__fill[data-pct]', root || document).forEach(function (el) {
+          el.style.width = Math.max(0, Math.min(100, Number(el.dataset.pct))) + '%';
+        });
+      });
     }
 
     /**
-     * Set the connect form up for a second account of a vendor already in use.
+     * Recorded history for one window, on a fixed 0-100 scale.
      *
-     * Routing splits traffic across every seat that claims a model, so a second
-     * seat is only useful if it claims the same models as the first — which is
-     * why the list is copied rather than left to be discovered from the vendor.
-     * The id gets the first free numeric suffix so the two do not collide.
+     * Fitting the line to its own data would make a window at 2% look like one
+     * at 90%. Two points is the minimum worth drawing: one sample is not a trend.
      */
-    function prepareSiblingSeat(existing, providers) {
-      const base = existing.id.replace(/-\d+$/, '');
-      const taken = new Set(providers.map((p) => p.id));
-      let suffix = 2;
-      while (taken.has(`${base}-${suffix}`)) suffix++;
-
-      $('o-vendor').value = existing.vendor;
-      onOAuthVendorChange();
-      $('o-id').value = `${base}-${suffix}`;
-      $('o-name').value = `${existing.name} (${suffix})`;
-      $('o-models').value = JSON.stringify(existing.models || []);
-      oauthStatus(
-        `Connecting a second ${existing.vendor} account. It will share traffic with ${existing.id}; adjust the weights afterwards if you want an uneven split.`,
-        false
-      );
-      $('o-vendor').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    function sparkline(points) {
+      var usable = (points || []).filter(function (p) { return typeof p.p === 'number'; });
+      if (usable.length < 2) return '';
+      var w = 56, h = 16;
+      var step = w / (usable.length - 1);
+      var d = usable.map(function (p, i) {
+        var y = h - (Math.max(0, Math.min(100, p.p)) / 100) * h;
+        return (i ? 'L' : 'M') + (i * step).toFixed(1) + ' ' + y.toFixed(1);
+      }).join(' ');
+      var first = Math.round(usable[0].p);
+      var last = Math.round(usable[usable.length - 1].p);
+      return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Trend, ' +
+        first + '% to ' + last + '%"><title>' + usable.length + ' samples, ' + first + '% to ' + last +
+        '%</title><path d="' + d + '"/></svg>';
     }
 
-    function onOAuthVendorChange() {
-      const v = oauthVendors.find((x) => x.id === $('o-vendor').value);
-      if (!v) return;
-      // Follow the vendor unless the operator has typed their own value. The
-      // previous check was "only fill when empty", which meant switching vendor
-      // left the last vendor's id and name sitting in the form.
-      setSuggested('o-id', suggestedProviderId(v));
-      setSuggested('o-name', v.label);
-      // Left blank on purpose: models are discovered from the vendor on connect.
-      // Filling anything here would count as an explicit list and suppress that.
-      $('o-models').value = '';
-      $('o-models-hint').textContent =
-        'Optional — left blank, the models this account can use are fetched from ' +
-        v.label + ' when you connect. Example: ' +
-        JSON.stringify((v.default_models || []).slice(0, 2));
-      // Import is offered when the vendor's CLI writes a credential file we can parse.
-      $('o-import-block').classList.toggle('hidden', !v.credential_file);
-      $('o-cred-hint').textContent = v.credential_file ? '— usually at ' + v.credential_file : '';
-      // Every vendor authorizes in the browser; they differ only in which side
-      // carries the code back.
-      $('o-authz-block').classList.toggle('hidden', !v.supports_manual_code && !v.supports_device_code);
-      $('o-authz-step2').classList.add('hidden');
-      $('o-paste-step').classList.toggle('hidden', !v.supports_manual_code);
-      $('o-device-step').classList.toggle('hidden', !v.supports_device_code);
-      stopDevicePolling();
-      oauthState = null;
-      oauthOverwrite = false;
-      const paths = (v.supported_paths || []).length
-        ? ' Serves ' + v.supported_paths.join(', ') + ' only — other paths fall through to your API-key providers.'
-        : '';
-      // Said before connecting, not after: a seat that cannot serve traffic is
-      // still worth connecting, but only if you knew that going in.
-      const routing = v.routable === false
-        ? ' This gateway cannot route requests to ' + v.label + ' yet — connecting gives you credential refresh, model discovery and usage limits, but no inference.'
-        : '';
-      // Some vendors need their client credentials configured on the deployment
-      // before any authorization can succeed. Better said here than at exchange.
-      const missing = (v.missing_secrets || []).length
-        ? ' Not configured yet: set ' + v.missing_secrets.join(' and ') + ' as Worker secrets first.'
-        : '';
-      $('o-vendor-note').textContent = (v.supports_device_code
-        ? 'Authorize in the browser: open the page shown and type in the code.'
-        : v.supports_manual_code
-          ? "Authorize in the browser, then paste back the localhost URL you land on. Or import the CLI's credential file below."
-          : "Log in with the vendor CLI, then import the credential file it wrote.") + paths + routing + missing;
-    }
-    $('o-vendor').onchange = onOAuthVendorChange;
-
-    async function loadOAuthVendors() {
-      if (currentUser?.role !== 'admin') return;
-      const { vendors } = await api('/oauth/vendors');
-      oauthVendors = vendors || [];
-      $('o-vendor').innerHTML = oauthVendors.map((v) => `<option value="${esc(v.id)}">${esc(v.label)}</option>`).join('');
-      onOAuthVendorChange();
+    function skeletonRows(count, cols) {
+      var out = '';
+      for (var i = 0; i < count; i++) {
+        var cells = '';
+        for (var c = 0; c < cols; c++) cells += '<td><span class="skeleton">loading</span></td>';
+        out += '<tr>' + cells + '</tr>';
+      }
+      return out;
     }
 
-    /* Device authorization (RFC 8628). The browser drives the poll loop: an
-       operator can take minutes to approve, far longer than a request should
-       stay open on the Worker. */
-    let devicePollTimer = null;
-
-    function stopDevicePolling() {
-      if (devicePollTimer) { clearTimeout(devicePollTimer); devicePollTimer = null; }
+    function skeletonRecords(count) {
+      var out = '';
+      for (var i = 0; i < count; i++) {
+        out += '<div class="record"><div class="record__top"><div>' +
+          '<div class="record__name"><span class="skeleton">loading provider</span></div>' +
+          '<div class="record__meta"><span class="skeleton">identifier</span></div>' +
+          '</div></div></div>';
+      }
+      return out;
     }
 
-    function pollDeviceIn(delayMs) {
-      devicePollTimer = setTimeout(async () => {
-        if (!oauthState) return;
-        let data;
-        try {
-          const base = oauthInputs();
-          data = await api('/oauth/device/poll', { method: 'POST', body: JSON.stringify({
-            state: oauthState,
-            models: base.models.length ? base.models : undefined,
-            overwrite: oauthOverwrite,
-          }) });
-        } catch (e) {
-          stopDevicePolling();
-          oauthState = null;
-          $('o-authz-step2').classList.add('hidden');
-          oauthStatus(e.message, true);
-          return;
-        }
-        if (data.status === 'pending') { pollDeviceIn(data.retry_in_ms || 5000); return; }
-        stopDevicePolling();
-        oauthState = null;
-        oauthOverwrite = false;
-        $('o-authz-step2').classList.add('hidden');
-        oauthStatus('Account connected.', false);
-        await Promise.all([refreshOAuth(), refreshProviders()]);
-      }, delayMs);
+    function emptyState(title, body) {
+      return '<div class="empty"><strong>' + esc(title) + '</strong><p>' + body + '</p></div>';
     }
 
-    $('o-start-btn').onclick = async () => {
-      let payload, vendor;
-      try {
-        const base = oauthInputs();
-        vendor = oauthVendors.find((x) => x.id === base.vendor);
-        payload = { vendor: base.vendor, provider_id: base.provider_id, provider_name: base.provider_name };
-      } catch (e) { oauthStatus(e.message, true); return; }
-      stopDevicePolling();
-      oauthOverwrite = false;
-      const route = vendor?.supports_device_code ? '/oauth/device/start' : '/oauth/start';
-      try {
-        let data;
-        try {
-          data = await api(route, { method: 'POST', body: JSON.stringify(payload) });
-        } catch (e) {
-          // 409 means this id already holds an API key. Converting it discards
-          // that key, so ask once here rather than after the vendor round trip.
-          if (e.status !== 409 || !confirm(e.message + '\n\nConvert it anyway?')) throw e;
-          oauthOverwrite = true;
-          data = await api(route, { method: 'POST', body: JSON.stringify({ ...payload, overwrite: true }) });
-        }
-        oauthState = data.state;
-
-        if (vendor?.supports_device_code) {
-          const url = data.verification_uri_complete || data.verification_uri;
-          const dlink = $('o-authz-url');
-          dlink.href = url;
-          dlink.textContent = url;
-          $('o-device-code').textContent = data.user_code;
-          $('o-authz-step2').classList.remove('hidden');
-          oauthStatus('Authorization started. Approve it in the browser.', false);
-          pollDeviceIn(data.interval_ms || 5000);
-          return;
-        }
-
-        const link = $('o-authz-url');
-        link.href = data.authorize_url;
-        link.textContent = data.authorize_url;
-        $('o-authz-step2').classList.remove('hidden');
-        oauthStatus('Authorization started. The code expires in 10 minutes.', false);
-      } catch (e) { oauthStatus(e.message, true); }
-    };
-
-    $('o-complete-btn').onclick = async () => {
-      if (!oauthState) { oauthStatus('Start authorization first.', true); return; }
-      const code = $('o-code').value.trim();
-      if (!code) { oauthStatus('Paste the code first.', true); return; }
-      try {
-        const base = oauthInputs();
-        await api('/oauth/complete', { method: 'POST', body: JSON.stringify({ state: oauthState, code, models: base.models.length ? base.models : undefined, overwrite: oauthOverwrite }) });
-        oauthState = null;
-        oauthOverwrite = false;
-        $('o-code').value = '';
-        $('o-authz-step2').classList.add('hidden');
-        oauthStatus('Account connected.', false);
-        await Promise.all([refreshOAuth(), refreshProviders()]);
-      } catch (e) { oauthStatus(e.message, true); }
-    };
-
-    $('o-import-btn').onclick = async () => {
-      let payload;
-      try {
-        payload = oauthInputs();
-        const raw = $('o-creds').value.trim();
-        if (!raw) throw new Error('Paste the credential file contents first');
-        payload.credentials = JSON.parse(raw);
-        if (!payload.models.length) delete payload.models;
-      } catch (e) { oauthStatus(e.message, true); return; }
-      try {
-        try {
-          await api('/oauth/import', { method: 'POST', body: JSON.stringify(payload) });
-        } catch (e) {
-          if (e.status !== 409 || !confirm(e.message + '\n\nConvert it anyway?')) throw e;
-          await api('/oauth/import', { method: 'POST', body: JSON.stringify({ ...payload, overwrite: true }) });
-        }
-        $('o-creds').value = '';
-        oauthStatus('Account connected. The imported token is refreshed on first use.', false);
-        await Promise.all([refreshOAuth(), refreshProviders()]);
-      } catch (e) { oauthStatus(e.message, true); }
-    };
-
-    /**
-     * Vendor-side limits per seat, cached for the visit.
-     *
-     * Every read here is a live call to the vendor's own endpoint, so switching
-     * tabs must not re-issue them; the operator refreshes a seat explicitly.
-     */
-    const oauthQuota = {};
-
-    function meterTone(percent) {
-      if (percent >= 90) return ' crit';
-      if (percent >= 75) return ' warn';
-      return '';
-    }
-
-    /** "in 3h 20m" — how long until a window refills. */
     function untilLabel(ms) {
       if (!ms) return '';
-      const delta = ms - Date.now();
+      var delta = ms - Date.now();
       if (delta <= 0) return 'resets now';
-      const mins = Math.round(delta / 60000);
+      var mins = Math.round(delta / 60000);
       if (mins < 60) return 'resets in ' + mins + 'm';
-      const hrs = Math.floor(mins / 60);
+      var hrs = Math.floor(mins / 60);
       if (hrs < 48) {
-        const rem = mins % 60;
+        var rem = mins % 60;
         return 'resets in ' + hrs + 'h' + (rem ? ' ' + rem + 'm' : '');
       }
       return 'resets in ' + Math.round(hrs / 24) + 'd';
@@ -1210,487 +759,1409 @@
     function periodLabel(hours) {
       if (!hours) return '';
       if (hours < 24) return Math.round(hours) + 'h window';
-      const days = Math.round(hours / 24);
+      var days = Math.round(hours / 24);
       return days === 7 ? 'weekly window' : days + 'd window';
     }
 
+    function expiryAbsolute(at) {
+      return at ? new Date(at).toLocaleString() : 'unknown';
+    }
+
+    /* "lapsed 3 days ago" is the part that decides whether you press Refresh;
+       the timestamp on its own makes you do the subtraction yourself. */
+    function expiryRelative(at) {
+      if (!at) return 'no expiry recorded';
+      var delta = new Date(at).getTime() - Date.now();
+      var mins = Math.round(Math.abs(delta) / 60000);
+      var span = mins < 60 ? mins + ' minutes'
+        : mins < 60 * 48 ? Math.round(mins / 60) + ' hours'
+        : Math.round(mins / 1440) + ' days';
+      return delta < 0 ? 'lapsed ' + span + ' ago' : 'in ' + span;
+    }
+
+    /* Delegated behaviours that apply anywhere on the page. */
+    document.addEventListener('click', function (e) {
+      var secret = e.target.closest('[data-secret]');
+      if (secret) {
+        var input = $(secret.dataset.secret);
+        var show = input.type === 'password';
+        input.type = show ? 'text' : 'password';
+        secret.querySelector('.i-show').hidden = show;
+        secret.querySelector('.i-hide').hidden = !show;
+        secret.setAttribute('aria-label', show ? 'Hide' : 'Show');
+        return;
+      }
+
+      var copy = e.target.closest('[data-copy]');
+      if (copy) {
+        var text = $(copy.dataset.copy).textContent;
+        var done = function () {
+          var was = copy.textContent;
+          copy.textContent = 'Copied';
+          setTimeout(function () { copy.textContent = was; }, 1600);
+        };
+        if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {
+          toast('Could not reach the clipboard. Select the text and copy it by hand.', 'bad');
+        });
+        return;
+      }
+
+      var dismiss = e.target.closest('[data-dismiss]');
+      if (dismiss) { $(dismiss.dataset.dismiss).hidden = true; return; }
+
+      var more = e.target.closest('[data-chip-more]');
+      if (more) {
+        var set = more.closest('[data-chipset]');
+        var open = more.dataset.open === 'true';
+        Array.prototype.forEach.call(set.querySelectorAll('.is-extra'), function (c) { c.hidden = open; });
+        more.dataset.open = open ? 'false' : 'true';
+        more.textContent = open ? more.dataset.rest + ' more' : 'Show fewer';
+        return;
+      }
+
+      var toggle = e.target.closest('[data-theme-toggle]');
+      if (toggle) {
+        savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('gw-theme', savedTheme); } catch (err) { /* ignore */ }
+        applyTheme(savedTheme);
+        return;
+      }
+
+      var out = e.target.closest('[data-signout]');
+      if (out) signOut();
+    });
+
+    /* The command bar thins out once you have scrolled past the top of a view. */
+    window.addEventListener('scroll', function () {
+      var stuck = window.scrollY > 12 ? 'true' : 'false';
+      all('.bar').forEach(function (bar) { bar.dataset.stuck = stuck; });
+    }, { passive: true });
+
+    /* --------------------------------------------------------------- state */
+    var me = null;
+    var catalog = [];
+    var knownUsers = [];
+    var vendors = [];
+    var oauthState = null;
+    /* Set when the admin agrees to convert an existing API-key provider. It has
+       to survive from /start through /complete: the state is single use, so the
+       question cannot be asked again after the vendor round trip. */
+    var oauthOverwrite = false;
+    var devicePollTimer = null;
+    var quotaCache = {};
+
+    /* ---------------------------------------------------------------- views */
+    function showView(name) {
+      if (!me) return;
+      var adminOnly = { providers: 1, subscriptions: 1, users: 1 };
+      if (adminOnly[name] && me.role !== 'admin') name = 'keys';
+      all('.view').forEach(function (v) { v.hidden = v.dataset.panel !== name; });
+      all('.nav__item[data-view]').forEach(function (b) {
+        if (b.dataset.view === name) b.setAttribute('aria-current', 'page');
+        else b.removeAttribute('aria-current');
+      });
+      try { history.replaceState(null, '', '#' + name); } catch (e) { /* ignore */ }
+    }
+
+    all('.nav__item[data-view]').forEach(function (b) {
+      b.onclick = function () { showView(b.dataset.view); };
+    });
+
+    function applyRole() {
+      var isAdmin = me && me.role === 'admin';
+      all('.admin-only').forEach(function (el) { el.hidden = !isAdmin; });
+      $('me-email').textContent = me ? me.email : '';
+      $('me-role').textContent = me ? me.role : '';
+      $('k-rpm').disabled = !isAdmin;
+      $('k-tokens').disabled = !isAdmin;
+      $('k-limit-note').textContent = isAdmin ? '' : 'Rate and token limits are set by an admin.';
+      var wanted = (location.hash || '').replace('#', '');
+      showView(wanted || (isAdmin ? 'providers' : 'keys'));
+    }
+
+    /* ----------------------------------------------------------------- auth */
+    var authMode = 'login';
+
+    function setAuthMode(mode) {
+      authMode = mode;
+      var copy = {
+        login: ['Sign in', 'Your keys, providers and usage for this gateway.', 'Sign in'],
+        signup: ['Create an account', 'Redeem an invite code to get your own API keys.', 'Create account'],
+        setup: ['First run', 'Nobody owns this gateway yet. The account you create now is the admin.', 'Create admin account'],
+      }[mode];
+      $('auth-title').textContent = copy[0];
+      $('auth-sub').textContent = copy[1];
+      $('auth-submit-text').textContent = copy[2];
+      $('invite-field').hidden = mode !== 'signup';
+      $('auth-alt').hidden = mode === 'setup';
+      $('auth-switch').textContent = mode === 'signup' ? 'Back to sign in' : 'Create an account';
+      $('auth-alt').firstChild.textContent = mode === 'signup' ? 'Already have an account? ' : 'Have an invite code? ';
+      $('password').autocomplete = mode === 'login' ? 'current-password' : 'new-password';
+      note($('auth-note'), '');
+    }
+
+    $('auth-switch').onclick = function () {
+      setAuthMode(authMode === 'signup' ? 'login' : 'signup');
+    };
+
+    $('auth-form').onsubmit = async function (e) {
+      e.preventDefault();
+      note($('auth-note'), '');
+      var email = $('email').value.trim();
+      var password = $('password').value;
+      var btn = $('auth-submit');
+      try {
+        await run(btn, async function () {
+          if (authMode === 'setup') {
+            await api('/setup', { method: 'POST', body: JSON.stringify({ email: email, password: password }) });
+          } else if (authMode === 'signup') {
+            await api('/signup', {
+              method: 'POST',
+              body: JSON.stringify({ email: email, password: password, invite_code: $('invite-code').value.trim() }),
+            });
+          }
+          var session = await api('/login', { method: 'POST', body: JSON.stringify({ email: email, password: password }) });
+          await enterApp(session);
+        });
+      } catch (err) {
+        note($('auth-note'), err.message, 'bad');
+      }
+    };
+
+    async function signOut() {
+      try { await api('/logout', { method: 'POST' }); } catch (e) { /* the session is going either way */ }
+      me = null;
+      stopDevicePolling();
+      $('app').hidden = true;
+      $('auth').hidden = false;
+      $('password').value = '';
+      setAuthMode('login');
+    }
+
+    /* ------------------------------------------------------------ providers */
+    function renderCatalog(filter) {
+      var q = (filter || '').toLowerCase();
+      var list = catalog.filter(function (p) {
+        return !q || p.id.indexOf(q) >= 0 || p.name.toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 40);
+      var box = $('p-list');
+      box.innerHTML = list.length
+        ? list.map(function (p) {
+            return '<button type="button" class="combo__opt" role="option" data-id="' + esc(p.id) + '">' +
+              '<span>' + esc(p.name) + '</span>' +
+              (p.supportsLiveModels ? '<span class="badge badge--accent">live models</span>' : '') +
+              '<span class="id">' + esc(p.id) + '</span></button>';
+          }).join('')
+        : '<div class="combo__opt" aria-disabled="true">Nothing matches that.</div>';
+      all('.combo__opt[data-id]', box).forEach(function (opt) {
+        opt.onclick = function () {
+          var p = catalog.filter(function (x) { return x.id === opt.dataset.id; })[0];
+          if (!p) return;
+          $('p-id').value = p.id;
+          $('p-name').value = p.name;
+          $('p-models').value = JSON.stringify(p.defaultPrefixes || []);
+          $('p-search').value = p.name;
+          closeCatalog();
+          $('p-key').focus();
+        };
+      });
+    }
+
+    function openCatalog() {
+      $('p-list').hidden = false;
+      $('p-search').setAttribute('aria-expanded', 'true');
+      renderCatalog($('p-search').value);
+    }
+
+    function closeCatalog() {
+      $('p-list').hidden = true;
+      $('p-search').setAttribute('aria-expanded', 'false');
+    }
+
+    $('p-search').addEventListener('focus', openCatalog);
+    $('p-search').addEventListener('input', function () { openCatalog(); });
+    $('p-search').addEventListener('keydown', function (e) { if (e.key === 'Escape') closeCatalog(); });
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.combo')) closeCatalog();
+    });
+
+    async function loadCatalog() {
+      if (!me || me.role !== 'admin') return;
+      var data = await api('/provider-presets');
+      catalog = data.presets || [];
+      $('catalog-count').textContent = catalog.length + ' available';
+      renderCatalog('');
+    }
+
     /**
-     * Recorded history for one window, as a small inline SVG.
-     *
-     * Fixed 0-100 vertical scale rather than fitting the data: a line that
-     * always fills the box would make 2% look like 90%. Two points is the
-     * minimum worth drawing — one sample is not a trend.
+     * Three separate things take a provider out of service and each needs a
+     * different response, so they stay distinct badges rather than collapsing
+     * into one "unhealthy": a cooldown clears itself, a deactivation needs a
+     * reconnect, and not-routable is a gap in this gateway, not a fault.
      */
-    function sparkline(points) {
-      if (!points || points.length < 2) return '';
-      const usable = points.filter((p) => typeof p.p === 'number');
-      if (usable.length < 2) return '';
-      const w = 54, h = 14;
-      const step = w / (usable.length - 1);
-      const d = usable.map((p, i) =>
-        `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - (Math.max(0, Math.min(100, p.p)) / 100) * h).toFixed(1)}`
-      ).join(' ');
-      const first = Math.round(usable[0].p);
-      const last = Math.round(usable[usable.length - 1].p);
-      return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trend: ${first}% to ${last}%"><title>${usable.length} samples · ${first}% → ${last}%</title><path d="${d}"/></svg>`;
+    function healthBadges(p) {
+      var out = [];
+      if (p.routable === false) {
+        out.push('<span class="badge" title="The credential is held and refreshed and its limits are read, but requests cannot be routed to this vendor yet.">limits only</span>');
+      }
+      if (!p.is_active) {
+        out.push('<span class="badge badge--danger" title="' + esc(p.disabled_reason || 'Deactivated') + '">deactivated</span>');
+      } else if (p.cooling_down) {
+        var until = p.cooldown_until ? new Date(p.cooldown_until) : null;
+        var why = p.cooldown_reason === 'quota' ? 'out of quota'
+          : p.cooldown_reason === 'auth' ? 'auth failing'
+          : 'upstream failing';
+        out.push('<span class="badge badge--warn" title="' + esc(p.last_failure_message || '') + '">' + why +
+          (until ? ', until ' + esc(until.toLocaleTimeString()) : '') + '</span>');
+      }
+      return out.join(' ');
+    }
+
+    /**
+     * A model list, short enough to read at a glance.
+     *
+     * A synced seat can claim two dozen models, and printing all of them buries
+     * the record's name, health and actions under a wall of chips. The first
+     * few answer "what is this for"; the rest are there when you ask for them.
+     */
+    function chips(list, emptyText, head) {
+      if (!list || !list.length) return '<span class="muted">' + esc(emptyText || 'none') + '</span>';
+      var visible = head == null ? 6 : head;
+      var chip = function (m, extra) {
+        return '<span class="chip' + (extra ? ' is-extra' : '') + '"' + (extra ? ' hidden' : '') + '>' +
+          esc(m) + '</span>';
+      };
+      var rest = list.length - visible;
+      return '<span class="chips" data-chipset>' +
+        list.slice(0, visible).map(function (m) { return chip(m, false); }).join('') +
+        (rest > 0
+          ? list.slice(visible).map(function (m) { return chip(m, true); }).join('') +
+            '<button type="button" class="chip chip--more" data-chip-more data-rest="' + rest + '">' +
+            rest + ' more</button>'
+          : '') +
+        '</span>';
+    }
+
+    /** Who a metered provider bills to: everyone, or one named account. */
+    function ownerControl(p) {
+      var options = ['<option value="">Shared with everyone</option>'].concat(
+        knownUsers.map(function (u) {
+          var selected = p.owner_only && String(p.owner_user_id) === String(u.id) ? ' selected' : '';
+          return '<option value="' + esc(u.id) + '"' + selected + '>' + esc(u.email) + '</option>';
+        })
+      ).join('');
+      return '<select class="btn--sm" data-owner="' + esc(p.id) + '" aria-label="Billing account">' + options + '</select>';
+    }
+
+    async function refreshProviders() {
+      if (!me || me.role !== 'admin') return;
+      var box = $('providers-list');
+      if (!box.children.length) box.innerHTML = skeletonRecords(3);
+      var data = await api('/providers');
+      var providers = data.providers || [];
+      $('providers-count').textContent = providers.length;
+
+      if (!providers.length) {
+        box.innerHTML = emptyState(
+          'No providers yet',
+          'Add one above. Any request whose model name starts with one of its routing prefixes will be served by it.'
+        );
+        return;
+      }
+
+      box.innerHTML = providers.map(function (p) {
+        var isOauth = p.auth_type === 'oauth';
+        return '<div class="record">' +
+          '<div class="record__top"><div>' +
+            '<div class="record__name">' + esc(p.name) +
+              (isOauth ? ' <span class="badge badge--accent">subscription</span>' : '') +
+              ' ' + healthBadges(Object.assign({ routable: true }, p)) +
+            '</div>' +
+            '<div class="record__meta"><code class="id">' + esc(p.id) + '</code></div>' +
+          '</div>' +
+          '<div class="record__actions">' +
+            (isOauth ? '<span class="muted">managed in Subscriptions</span>'
+              : '<button type="button" class="btn btn--secondary btn--sm" data-sync="' + esc(p.id) + '">Sync models</button>') +
+            (p.cooling_down || !p.is_active
+              ? '<button type="button" class="btn btn--secondary btn--sm" data-reinstate="' + esc(p.id) + '">Reinstate</button>' : '') +
+            '<button type="button" class="btn btn--danger btn--sm" data-remove="' + esc(p.id) + '">Remove</button>' +
+          '</div></div>' +
+          '<div class="record__detail"><dl>' +
+            '<div><dt>Routing prefixes</dt><dd>' + chips(p.models, 'no prefixes, never matched') + '</dd></div>' +
+            (isOauth ? '' : '<div><dt>Bills to</dt><dd>' + ownerControl(p) + '</dd></div>') +
+          '</dl></div>' +
+        '</div>';
+      }).join('');
+
+      all('[data-sync]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          run(btn, async function () {
+            try {
+              var r = await api('/providers/' + btn.dataset.sync + '/sync-models', { method: 'POST' });
+              toast(r.model_count + ' models synced for ' + btn.dataset.sync);
+              await refreshProviders();
+            } catch (e) { toast(e.message, 'bad'); }
+          });
+        };
+      });
+
+      all('[data-reinstate]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          run(btn, async function () {
+            try {
+              await api('/providers/' + btn.dataset.reinstate + '/reinstate', { method: 'POST' });
+              toast(btn.dataset.reinstate + ' is back in rotation');
+            } catch (e) { toast(e.message, 'bad'); }
+            await refreshProviders();
+          });
+        };
+      });
+
+      all('[data-remove]', box).forEach(function (btn) {
+        confirmable(btn, 'Remove for good?', function () {
+          run(btn, async function () {
+            try {
+              await api('/providers/' + btn.dataset.remove, { method: 'DELETE' });
+              toast(btn.dataset.remove + ' removed');
+            } catch (e) { toast(e.message, 'bad'); }
+            await refreshProviders();
+          });
+        });
+      });
+
+      all('[data-owner]', box).forEach(function (sel) {
+        sel.onchange = async function () {
+          try {
+            await api('/providers/' + sel.dataset.owner + '/owner', {
+              method: 'POST',
+              body: JSON.stringify({ user_id: sel.value === '' ? null : Number(sel.value) }),
+            });
+            toast(sel.value === '' ? 'Shared with everyone' : 'Now bills to ' + sel.selectedOptions[0].textContent);
+          } catch (e) { toast(e.message, 'bad'); }
+          await refreshProviders();
+        };
+      });
+    }
+
+    $('p-fetch').onclick = function () {
+      var id = $('p-id').value.trim();
+      var key = $('p-key').value.trim();
+      if (!id || !key) {
+        note($('p-note'), 'Enter the provider id and its API key first.', 'warn');
+        return;
+      }
+      note($('p-note'), 'Asking ' + id + ' what it can serve...');
+      $('p-preview').hidden = true;
+      run($('p-fetch'), async function () {
+        try {
+          var data = await api('/providers/fetch-models', {
+            method: 'POST',
+            body: JSON.stringify({ provider_id: id, api_key: key }),
+          });
+          if (data.suggested_prefixes && data.suggested_prefixes.length) {
+            $('p-models').value = JSON.stringify(data.suggested_prefixes);
+          }
+          var models = data.models || [];
+          if (data.error) {
+            note($('p-note'), data.error, 'bad');
+          } else {
+            note($('p-note'), models.length + ' models found. The routing prefixes above were updated to match.', 'ok');
+          }
+          if (models.length) {
+            $('p-preview').textContent = models.map(function (m) { return m.id; }).join('\n');
+            $('p-preview').hidden = false;
+          }
+        } catch (e) {
+          note($('p-note'), e.message, 'bad');
+        }
+      });
+    };
+
+    $('p-save').onclick = function () {
+      var models;
+      try {
+        var raw = $('p-models').value.trim();
+        models = raw ? JSON.parse(raw) : [];
+        if (!Array.isArray(models)) throw new Error('Routing prefixes must be a JSON array.');
+      } catch (e) {
+        note($('p-note'), 'Routing prefixes must be a JSON array, for example ["gpt-"].', 'bad');
+        return;
+      }
+      run($('p-save'), async function () {
+        try {
+          await api('/providers', {
+            method: 'POST',
+            body: JSON.stringify({
+              id: $('p-id').value.trim(),
+              name: $('p-name').value.trim(),
+              api_key: $('p-key').value,
+              models: models,
+            }),
+          });
+          $('p-key').value = '';
+          note($('p-note'), '');
+          toast('Provider saved');
+          await refreshProviders();
+        } catch (e) {
+          note($('p-note'), e.message, 'bad');
+        }
+      });
+    };
+
+    /* -------------------------------------------------------- subscriptions */
+
+    function parseModels(value) {
+      var raw = value.trim();
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) throw new Error('Models must be a JSON array.');
+      return parsed;
+    }
+
+    function oauthInputs() {
+      var providerId = $('o-id').value.trim().toLowerCase();
+      if (!providerId) throw new Error('A provider id is required.');
+      return {
+        vendor: $('o-vendor').value,
+        provider_id: providerId,
+        provider_name: $('o-name').value.trim(),
+        models: parseModels($('o-models').value),
+      };
+    }
+
+    /**
+     * A 409 means this id already holds an API key, and converting it discards
+     * that key. Asked inline, next to the form that caused it, and answered
+     * before the vendor round trip rather than after.
+     */
+    function askOverwrite(message, onYes) {
+      var el = $('o-note');
+      el.className = 'note note--warn';
+      el.innerHTML = '<div>' + esc(message) + '</div>';
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'btn btn--danger btn--sm';
+      btn.textContent = 'Convert it anyway';
+      btn.style.justifySelf = 'start';
+      btn.onclick = function () { note(el, ''); onYes(); };
+      el.appendChild(btn);
+      el.hidden = false;
+    }
+
+    /* Fields the vendor suggests, and what it last suggested for each. A field
+       still holding the previous suggestion has not been touched by the
+       operator, so it follows the vendor; anything else is their own text. */
+    var suggested = {};
+
+    function setSuggested(fieldId, value) {
+      var el = $(fieldId);
+      var current = el.value.trim();
+      if (!current || current === suggested[fieldId]) el.value = value;
+      suggested[fieldId] = value;
+    }
+
+    /**
+     * Short and vendor-agnostic on purpose, for every vendor here, not just
+     * one: this id shows up in `owned_by` on /v1/models and in any
+     * `provider_id/model` address, and a short alias (see VENDOR_ALIASES in
+     * modelRouting.ts — `codex/`, `claude/`, `grok/`, `anti/`, `kimi/`) already
+     * covers routing without ever naming a row. There is no reason for the id
+     * itself to announce which vendor it is or that it's a subscription seat
+     * at all. Each vendor gets its own opaque base (not a mnemonic — a
+     * mnemonic short enough to still look "short" would just be the vendor
+     * name again) so two different vendors' first seats never suggest the
+     * same id; a counter per vendor keeps a second seat on the same vendor
+     * distinct too.
+     */
+    var seatCounters = {};
+    function suggestedProviderId(v) {
+      var known = {
+        'openai-codex': 'q1',
+        'anthropic-claude-code': 'q2',
+        'xai-grok-cli': 'q3',
+        'google-antigravity': 'q4',
+        'kimi-code': 'q5',
+      };
+      var base = known[v.id];
+      if (!base) return v.id;
+      seatCounters[v.id] = (seatCounters[v.id] || 0) + 1;
+      var n = seatCounters[v.id];
+      return n === 1 ? base + '-a' : base + '-' + String.fromCharCode(96 + n);
+    }
+
+    /**
+     * Only these three redirect to a fixed localhost port a deployed gateway
+     * can't receive (see docs/OAUTH_PROVIDERS.md). Grok and Kimi authorize by
+     * device code instead — there is no redirect for scripts/oauth-catch.mjs
+     * to catch, so it's not offered for them.
+     */
+    var CATCH_VENDORS = {
+      'openai-codex': 'codex',
+      'anthropic-claude-code': 'claude',
+      'google-antigravity': 'antigravity',
+    };
+
+    function onVendorChange() {
+      var v = vendors.filter(function (x) { return x.id === $('o-vendor').value; })[0];
+      if (!v) return;
+
+      // Follow the vendor unless the operator typed their own value: switching
+      // vendor used to leave the last one's id and name sitting in the form.
+      setSuggested('o-id', suggestedProviderId(v));
+      setSuggested('o-name', v.label);
+      // Left blank on purpose. Models are discovered from the vendor on connect,
+      // and anything here counts as an explicit list that suppresses that.
+      $('o-models').value = '';
+      $('o-models-hint').textContent = 'Left blank, the models this account can use are fetched from ' +
+        v.label + ' when you connect. Example: ' + JSON.stringify((v.default_models || []).slice(0, 2));
+
+      var catchArg = CATCH_VENDORS[v.id];
+      $('o-catch-step').hidden = !catchArg;
+      if (catchArg) {
+        $('o-catch-cmd').textContent = 'node scripts/oauth-catch.mjs ' + catchArg + ' ' + location.origin;
+      }
+
+      $('o-import').hidden = !v.credential_file;
+      $('o-cred-hint').textContent = v.credential_file ? 'usually at ' + v.credential_file : '';
+      $('o-authz').hidden = !v.supports_manual_code && !v.supports_device_code;
+      $('o-step2').hidden = true;
+      $('o-paste-step').hidden = !v.supports_manual_code;
+      $('o-device-step').hidden = !v.supports_device_code;
+
+      stopDevicePolling();
+      oauthState = null;
+      oauthOverwrite = false;
+
+      var lines = [
+        v.supports_device_code
+          ? 'Authorize in the browser: open the page shown and type in the code.'
+          : v.supports_manual_code
+            ? 'Authorize in the browser, then paste back the localhost address you land on. Or import the CLI credential file below.'
+            : 'Log in with the vendor CLI, then import the credential file it wrote.',
+      ];
+      if ((v.supported_paths || []).length) {
+        lines.push('Serves ' + v.supported_paths.join(', ') + ' only. Other paths fall through to your API-key providers.');
+      }
+      // Said before connecting rather than after: a seat that cannot serve
+      // traffic is still worth connecting, but only if you knew going in.
+      if (v.routable === false) {
+        lines.push('This gateway cannot route requests to ' + v.label +
+          ' yet. Connecting gives you credential refresh, model discovery and usage limits, but no inference.');
+      }
+      if ((v.missing_secrets || []).length) {
+        lines.push('Not configured yet: set ' + v.missing_secrets.join(' and ') + ' as Worker secrets first.');
+      }
+      $('o-vendor-note').textContent = lines.join(' ');
+    }
+
+    $('o-vendor').onchange = onVendorChange;
+
+    $('o-catch-copy').onclick = function () {
+      var text = $('o-catch-cmd').textContent;
+      var copied = navigator.clipboard && navigator.clipboard.writeText
+        ? navigator.clipboard.writeText(text)
+        : Promise.reject();
+      copied.then(function () {
+        toast('Command copied. Run it in a terminal, then approve in step 1.', 'ok');
+      }, function () {
+        toast('Could not copy automatically — select and copy the command by hand.', 'bad');
+      });
+    };
+
+    async function loadVendors() {
+      if (!me || me.role !== 'admin') return;
+      var data = await api('/oauth/vendors');
+      vendors = data.vendors || [];
+      $('o-vendor').innerHTML = vendors.map(function (v) {
+        return '<option value="' + esc(v.id) + '">' + esc(v.label) + '</option>';
+      }).join('');
+      onVendorChange();
+    }
+
+    /* Device authorization (RFC 8628). The browser drives the poll loop: an
+       operator can take minutes to approve, far longer than a request should
+       stay open on the Worker. */
+    function stopDevicePolling() {
+      if (devicePollTimer) { clearTimeout(devicePollTimer); devicePollTimer = null; }
+    }
+
+    function pollDeviceIn(delayMs) {
+      devicePollTimer = setTimeout(async function () {
+        if (!oauthState) return;
+        var data;
+        try {
+          var base = oauthInputs();
+          data = await api('/oauth/device/poll', {
+            method: 'POST',
+            body: JSON.stringify({
+              state: oauthState,
+              models: base.models.length ? base.models : undefined,
+              overwrite: oauthOverwrite,
+            }),
+          });
+        } catch (e) {
+          stopDevicePolling();
+          oauthState = null;
+          $('o-step2').hidden = true;
+          note($('o-note'), e.message, 'bad');
+          return;
+        }
+        if (data.status === 'pending') { pollDeviceIn(data.retry_in_ms || 5000); return; }
+        stopDevicePolling();
+        oauthState = null;
+        oauthOverwrite = false;
+        $('o-step2').hidden = true;
+        note($('o-note'), 'Account connected.', 'ok');
+        await Promise.all([refreshOAuth(), refreshProviders()]);
+      }, delayMs);
+    }
+
+    function startAuthorization(overwrite) {
+      var base, vendor, payload;
+      try {
+        base = oauthInputs();
+        vendor = vendors.filter(function (x) { return x.id === base.vendor; })[0];
+        payload = { vendor: base.vendor, provider_id: base.provider_id, provider_name: base.provider_name };
+      } catch (e) { note($('o-note'), e.message, 'bad'); return; }
+
+      stopDevicePolling();
+      oauthOverwrite = !!overwrite;
+      if (overwrite) payload.overwrite = true;
+      var route = vendor && vendor.supports_device_code ? '/oauth/device/start' : '/oauth/start';
+
+      run($('o-start'), async function () {
+        try {
+          var data = await api(route, { method: 'POST', body: JSON.stringify(payload) });
+          oauthState = data.state;
+
+          if (vendor && vendor.supports_device_code) {
+            var url = data.verification_uri_complete || data.verification_uri;
+            $('o-authz-url').href = url;
+            $('o-authz-url').textContent = url;
+            $('o-device-code').textContent = data.user_code;
+            $('o-step2').hidden = false;
+            note($('o-note'), 'Authorization started. Approve it in the browser.', 'ok');
+            pollDeviceIn(data.interval_ms || 5000);
+            return;
+          }
+
+          $('o-authz-url').href = data.authorize_url;
+          $('o-authz-url').textContent = data.authorize_url;
+          $('o-step2').hidden = false;
+          note($('o-note'), 'Authorization started. The code expires in 10 minutes.', 'ok');
+        } catch (e) {
+          if (e.status === 409 && !overwrite) {
+            askOverwrite(e.message, function () { startAuthorization(true); });
+            return;
+          }
+          note($('o-note'), e.message, 'bad');
+        }
+      });
+    }
+
+    $('o-start').onclick = function () { startAuthorization(false); };
+
+    $('o-complete').onclick = function () {
+      if (!oauthState) { note($('o-note'), 'Start the authorization first.', 'warn'); return; }
+      var code = $('o-code').value.trim();
+      if (!code) { note($('o-note'), 'Paste the address you landed on first.', 'warn'); return; }
+      run($('o-complete'), async function () {
+        try {
+          var base = oauthInputs();
+          await api('/oauth/complete', {
+            method: 'POST',
+            body: JSON.stringify({
+              state: oauthState,
+              code: code,
+              models: base.models.length ? base.models : undefined,
+              overwrite: oauthOverwrite,
+            }),
+          });
+          oauthState = null;
+          oauthOverwrite = false;
+          $('o-code').value = '';
+          $('o-step2').hidden = true;
+          note($('o-note'), 'Account connected.', 'ok');
+          await Promise.all([refreshOAuth(), refreshProviders()]);
+        } catch (e) {
+          note($('o-note'), e.message, 'bad');
+        }
+      });
+    };
+
+    /**
+     * Lands here when `scripts/oauth-catch.mjs` caught the vendor's dead
+     * localhost redirect and forwarded the code to this page as a query
+     * param, instead of the operator copy-pasting that localhost URL back in
+     * by hand. The started authorization lives server-side against `state`,
+     * so completing it needs nothing this page remembered from before the
+     * redirect — a fresh page load with just `state` and `code` is enough.
+     */
+    async function completeOAuthFromRedirect(state, code) {
+      showView('subscriptions');
+      try {
+        await api('/oauth/complete', {
+          method: 'POST',
+          body: JSON.stringify({ state: state, code: code }),
+        });
+        toast('Account connected.', 'ok');
+        await Promise.all([refreshOAuth(), refreshProviders()]);
+      } catch (e) {
+        toast(e.message || 'Could not complete the authorization', 'bad');
+      }
+    }
+
+    function importCredentials(overwrite) {
+      var payload;
+      try {
+        payload = oauthInputs();
+        var raw = $('o-creds').value.trim();
+        if (!raw) throw new Error('Paste the credential file contents first.');
+        payload.credentials = JSON.parse(raw);
+        if (!payload.models.length) delete payload.models;
+        if (overwrite) payload.overwrite = true;
+      } catch (e) { note($('o-note'), e.message, 'bad'); return; }
+
+      run($('o-import-btn'), async function () {
+        try {
+          await api('/oauth/import', { method: 'POST', body: JSON.stringify(payload) });
+          $('o-creds').value = '';
+          note($('o-note'), 'Account connected. The imported token is refreshed on first use.', 'ok');
+          await Promise.all([refreshOAuth(), refreshProviders()]);
+        } catch (e) {
+          if (e.status === 409 && !overwrite) {
+            askOverwrite(e.message, function () { importCredentials(true); });
+            return;
+          }
+          note($('o-note'), e.message, 'bad');
+        }
+      });
+    }
+
+    $('o-import-btn').onclick = function () { importCredentials(false); };
+
+    /**
+     * Set the connect form up for a second account of a vendor already in use.
+     *
+     * Routing splits traffic across every seat that claims a model, so a second
+     * seat is only useful if it claims the same models as the first, which is
+     * why the list is copied rather than left to be discovered. The id takes the
+     * first free numeric suffix so the two do not collide.
+     */
+    function prepareSiblingSeat(existing, providers) {
+      var base = existing.id.replace(/-\d+$/, '');
+      var taken = providers.map(function (p) { return p.id; });
+      var suffix = 2;
+      while (taken.indexOf(base + '-' + suffix) >= 0) suffix++;
+
+      $('o-vendor').value = existing.vendor;
+      onVendorChange();
+      $('o-id').value = base + '-' + suffix;
+      $('o-name').value = existing.name + ' (' + suffix + ')';
+      $('o-models').value = JSON.stringify(existing.models || []);
+      note($('o-note'), 'Connecting a second ' + existing.vendor + ' account. It will share traffic with ' +
+        existing.id + '. Adjust the weights afterwards if you want an uneven split.', 'ok');
+      $('o-vendor').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     function renderLimits(id) {
-      const cell = $('lim-' + id);
+      var cell = document.querySelector('[data-limits="' + CSS.escape(id) + '"]');
       if (!cell) return;
-      const entry = oauthQuota[id];
-      const refreshBtn = `<button type="button" class="linkish" data-o-limits="${esc(id)}">Refresh</button>`;
+      var entry = quotaCache[id];
 
       if (!entry || entry.state === 'loading') {
-        cell.innerHTML = '<span class="muted" style="font-size:0.75rem">Reading limits from the vendor…</span>';
-      } else if (entry.state === 'error') {
+        cell.innerHTML = '<div class="gauge"><div class="gauge__head"><span class="skeleton">reading limits from the vendor</span></div>' +
+          '<div class="meter"></div></div>';
+        return;
+      }
+
+      if (entry.state === 'error') {
         // One seat's limits failing says nothing about the others, so this is a
-        // note on the row rather than an error on the page.
-        cell.innerHTML = `<div class="limits-head"><strong>Limits unavailable</strong><span>${esc(entry.message)}</span>${refreshBtn}</div>`;
+        // note on the record rather than an error on the page.
+        cell.innerHTML = '<div class="note note--bad"><div><strong>Limits unavailable.</strong> ' +
+          esc(entry.message) + '</div></div>';
       } else if (entry.state === 'unsupported') {
-        cell.innerHTML = `<div class="limits-head"><span>${esc(entry.message)}</span></div>`;
+        cell.innerHTML = '<p class="muted">' + esc(entry.message) + '</p>';
       } else {
-        const q = entry.data;
-        const meters = (q.windows || []).map((w) => {
-          const pct = typeof w.usedPercent === 'number' ? Math.max(0, Math.min(100, w.usedPercent)) : null;
-          const detail = [
+        var q = entry.data;
+        var windows = q.windows || [];
+        var gauges = windows.map(function (w) {
+          var pct = typeof w.usedPercent === 'number' ? Math.max(0, Math.min(100, w.usedPercent)) : null;
+          var detail = [
             pct === null ? 'not reported' : pct.toFixed(0) + '% used',
             untilLabel(w.resetsAt),
             periodLabel(w.periodHours),
           ].filter(Boolean).join(' · ');
-          return `<div>
-            <div class="meter-label"><span>${esc(w.label)}</span><span>${esc(detail)}</span></div>
-            <div class="meter-row">
-              <div class="meter-track"><div class="meter-fill${pct === null ? '' : meterTone(pct)}" style="width:${pct === null ? 0 : pct}%"></div></div>
-              ${sparkline(entry.history?.[w.id])}
-            </div>
-          </div>`;
+          return '<div class="gauge">' +
+            '<div class="gauge__head"><span>' + esc(w.label) + '</span><span>' + esc(detail) + '</span></div>' +
+            '<div class="gauge__bar">' + meter(pct) + sparkline((entry.history || {})[w.id]) + '</div>' +
+            '</div>';
         }).join('');
-        // The action spends something at the vendor, so it is rendered greyed
-        // out rather than hidden when unavailable — discovering it exists is
-        // separate from being able to use it.
-        const action = q.action
-          ? `<button type="button" class="linkish" data-o-action="${esc(id)}" data-action-id="${esc(q.action.id)}"${q.action.available ? '' : ' disabled style="opacity:0.45;cursor:default"'}>${esc(q.action.label)}</button>`
-          : '';
-        const head = [
-          '<strong>Vendor limits</strong>',
-          q.plan ? '<span>' + esc(q.plan) + ' plan</span>' : '',
-          '<span>as of ' + esc(new Date(q.fetchedAt).toLocaleTimeString()) + '</span>',
-          refreshBtn,
-          action,
-        ].filter(Boolean).join('');
-        const notes = (q.notes || []).map((n) => `<div class="muted" style="font-size:0.75rem;margin-top:0.5rem">${esc(n)}</div>`).join('');
-        cell.innerHTML = `<div class="limits-head">${head}</div>`
-          + (meters ? `<div class="meters">${meters}</div>` : '<span class="muted" style="font-size:0.75rem">The vendor reported no limit windows for this account.</span>')
-          + notes;
+
+        var head = '<div class="record__meta">' +
+          '<span class="strong">Vendor limits</span>' +
+          (q.plan ? '<span class="dot">&middot;</span><span>' + esc(q.plan) + ' plan</span>' : '') +
+          '<span class="dot">&middot;</span><span>read ' + esc(new Date(q.fetchedAt).toLocaleTimeString()) + '</span>' +
+          '<span class="dot">&middot;</span><button type="button" class="link" data-relimit="' + esc(id) + '">Re-read</button>' +
+          // Rendered greyed out rather than hidden when unavailable: discovering
+          // the action exists is separate from being able to use it.
+          (q.action
+            ? '<span class="dot">&middot;</span><button type="button" class="link" data-quota-action="' + esc(id) +
+              '" data-action-id="' + esc(q.action.id) + '"' + (q.action.available ? '' : ' disabled') + '>' +
+              esc(q.action.label) + '</button>'
+            : '') +
+          '</div>';
+
+        var notes = (q.notes || []).map(function (n) {
+          return '<p class="muted">' + esc(n) + '</p>';
+        }).join('');
+
+        cell.innerHTML = head +
+          (gauges ? '<div class="gauges">' + gauges + '</div>'
+                  : '<p class="muted">The vendor reported no limit windows for this account.</p>') +
+          notes;
+        paintMeters(cell);
       }
 
-      const btn = cell.querySelector('[data-o-limits]');
-      if (btn) btn.onclick = () => loadLimits(id);
-      const actionBtn = cell.querySelector('[data-o-action]:not([disabled])');
-      if (actionBtn) {
-        actionBtn.onclick = async () => {
-          if (!confirm('This spends a credit at the vendor and cannot be undone. Continue?')) return;
-          actionBtn.textContent = 'Redeeming…';
-          try {
-            await api('/oauth/' + encodeURIComponent(id) + '/quota-action', {
-              method: 'POST',
-              body: JSON.stringify({ action: actionBtn.dataset.actionId }),
-            });
-          } catch (e) {
-            oauthStatus(e.message, true);
-          }
-          // Re-read either way: the credit may have been spent before the error.
-          await loadLimits(id);
-        };
+      var again = cell.querySelector('[data-relimit]');
+      if (again) again.onclick = function () { loadLimits(id); };
+
+      var action = cell.querySelector('[data-quota-action]:not([disabled])');
+      if (action) {
+        confirmable(action, 'Spend a credit?', function () {
+          run(action, async function () {
+            try {
+              await api('/oauth/' + encodeURIComponent(id) + '/quota-action', {
+                method: 'POST',
+                body: JSON.stringify({ action: action.dataset.actionId }),
+              });
+            } catch (e) {
+              toast(e.message, 'bad');
+            }
+            // Re-read either way: the credit may have been spent before the error.
+            await loadLimits(id);
+          });
+        });
       }
     }
 
     async function loadLimits(id) {
-      oauthQuota[id] = { state: 'loading' };
+      quotaCache[id] = { state: 'loading' };
       renderLimits(id);
       // History is recorded by the scheduled sampler, so it is a local read and
-      // never the reason the live lookup is slow — hence both at once.
-      const [usage, history] = await Promise.allSettled([
+      // never the reason the live lookup is slow. Both go out together.
+      var results = await Promise.allSettled([
         api('/oauth/' + encodeURIComponent(id) + '/usage'),
         api('/oauth/' + encodeURIComponent(id) + '/history'),
       ]);
-      const series = history.status === 'fulfilled' ? history.value.series : {};
+      var usage = results[0];
+      var history = results[1];
+      var series = history.status === 'fulfilled' ? (history.value.series || {}) : {};
+
       if (usage.status === 'rejected') {
-        oauthQuota[id] = { state: 'error', message: usage.reason.message };
+        quotaCache[id] = { state: 'error', message: usage.reason.message };
       } else {
-        const r = usage.value;
-        oauthQuota[id] = r.status === 'unsupported'
+        var r = usage.value;
+        quotaCache[id] = r.status === 'unsupported'
           ? { state: 'unsupported', message: r.message }
           : { state: 'ok', data: r, history: series };
       }
       renderLimits(id);
     }
 
-    /**
-     * Routing state for one seat.
-     *
-     * Three separate things can take a seat out of service and they need
-     * different responses, so they are distinct badges rather than one
-     * "unhealthy": cooling down clears itself, deactivated needs a reconnect,
-     * and not-routable is a gap in this gateway rather than a fault on the seat.
-     */
-    function healthBadges(p) {
-      const out = [];
-      if (p.routable === false) {
-        out.push('<span class="badge badge-manual" title="This gateway can hold and refresh the credential, and read its limits, but cannot route requests to this vendor yet.">Limits only</span>');
-      }
-      if (!p.is_active) {
-        out.push(`<span class="badge" style="background:var(--danger-bg);color:var(--danger)" title="${esc(p.disabled_reason || 'Deactivated')}">Deactivated</span>`);
-      } else if (p.cooling_down) {
-        const until = p.cooldown_until ? new Date(p.cooldown_until) : null;
-        const reason = p.cooldown_reason === 'quota' ? 'Out of quota'
-          : p.cooldown_reason === 'auth' ? 'Auth failing'
-          : 'Upstream failing';
-        out.push(`<span class="badge" style="background:var(--accent-bg);color:var(--accent)" title="${esc(p.last_failure_message || '')}">${reason}${until ? ' · until ' + esc(until.toLocaleTimeString()) : ''}</span>`);
-      }
-      return out.length ? '<div style="margin-top:0.35rem">' + out.join(' ') + '</div>' : '';
-    }
-
     async function refreshOAuth() {
-      if (currentUser?.role !== 'admin') return;
-      const { providers } = await api('/oauth/providers');
-      const tb = $('oauth-tbody');
+      if (!me || me.role !== 'admin') return;
+      var box = $('oauth-list');
+      if (!box.children.length) box.innerHTML = skeletonRecords(2);
+      var data = await api('/oauth/providers');
+      var providers = data.providers || [];
+      $('oauth-count').textContent = providers.length;
+
       if (!providers.length) {
-        tb.innerHTML = '<tr><td colspan="4" class="muted">No subscription accounts connected.</td></tr>';
+        box.innerHTML = emptyState(
+          'No subscription accounts connected',
+          'Connect one above to serve requests from a seat you already pay for, instead of a metered API key.'
+        );
         return;
       }
-      tb.innerHTML = providers.map((p) => {
-        const vendor = oauthVendors.find((v) => v.id === p.vendor);
-        const limitsRow = `<tr><td colspan="4" class="limits" id="lim-${esc(p.id)}"></td></tr>`;
-        const expiry = p.expires_at
-          ? new Date(p.expires_at).toLocaleString()
-          : 'unknown';
-        const badge = p.expired
-          ? '<span class="badge" style="background:var(--danger-bg);color:var(--danger)">Needs refresh</span>'
-          : '<span class="badge badge-live">Fresh</span>';
-        return `<tr class="seat-row">
-          <td><strong>${esc(p.name)}</strong>${p.account ? ' · ' + esc(p.account) : ''}<br><span style="font-family:var(--mono);font-size:0.7rem;color:var(--ink-3)">${esc(p.id)} · ${esc(vendor ? vendor.label : p.vendor)}</span>${healthBadges(p)}</td>
-          <td style="font-size:0.75rem">${esc(expiry)} ${badge}</td>
-          <td style="font-size:0.75rem;color:var(--ink-2)">${esc((p.models || []).join(', ')) || '—'}<br><button type="button" class="linkish" data-o-sync="${esc(p.id)}">Sync from vendor</button> · <button type="button" class="linkish" data-o-models="${esc(p.id)}">Edit</button> · <button type="button" class="linkish" data-o-weight="${esc(p.id)}">Weight ${esc(p.weight ?? 1)}</button> · <button type="button" class="linkish" data-o-clone="${esc(p.id)}">Add another account</button></td>
-          <td style="white-space:nowrap">
-            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-refresh="${esc(p.id)}">Refresh</button>
-            ${p.cooling_down || !p.is_active ? `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-reinstate="${esc(p.id)}">Reinstate</button>` : ''}
-            <button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-o-del="${esc(p.id)}">Disconnect</button>
-          </td>
-        </tr>${limitsRow}`;
+
+      box.innerHTML = providers.map(function (p) {
+        var vendor = vendors.filter(function (v) { return v.id === p.vendor; })[0];
+        var vendorLabel = vendor ? vendor.label : p.vendor;
+        // Most seats are named after their vendor, and printing both puts the
+        // same words twice on one record.
+        var showVendor = vendorLabel && vendorLabel !== p.name;
+        // A vendor whose client credentials are not set on this deployment can
+        // never report limits, so the record says so rather than leaving the
+        // reason buried in the limits area underneath.
+        var unconfigured = vendor && (vendor.missing_secrets || []).length
+          ? ' <span class="badge badge--warn" title="Set ' + esc(vendor.missing_secrets.join(' and ')) +
+            ' as Worker secrets.">not configured</span>'
+          : '';
+        return '<div class="record">' +
+          '<div class="record__top"><div>' +
+            '<div class="record__name">' + esc(p.name) +
+              (p.expired ? ' <span class="badge badge--danger">needs refresh</span>'
+                         : ' <span class="badge badge--ok">fresh</span>') +
+              unconfigured +
+              ' ' + healthBadges(p) +
+            '</div>' +
+            '<div class="record__meta">' +
+              '<code class="id">' + esc(p.id) + '</code>' +
+              (showVendor ? '<span class="dot">&middot;</span><span>' + esc(vendorLabel) + '</span>' : '') +
+              (p.account ? '<span class="dot">&middot;</span><span>' + esc(p.account) + '</span>' : '') +
+            '</div>' +
+          '</div>' +
+          '<div class="record__actions">' +
+            '<button type="button" class="btn btn--secondary btn--sm" data-o-refresh="' + esc(p.id) + '">Refresh token</button>' +
+            (p.cooling_down || !p.is_active
+              ? '<button type="button" class="btn btn--secondary btn--sm" data-o-reinstate="' + esc(p.id) + '">Reinstate</button>' : '') +
+            '<button type="button" class="btn btn--danger btn--sm" data-o-del="' + esc(p.id) + '">Disconnect</button>' +
+          '</div></div>' +
+
+          '<div class="record__detail"><dl>' +
+            '<div><dt>Token expires</dt><dd>' + esc(expiryAbsolute(p.expires_at)) +
+              '<div class="muted">' + esc(expiryRelative(p.expires_at)) + '</div></dd></div>' +
+            '<div><dt>Share of traffic</dt><dd>' +
+              '<input type="number" min="1" max="100" value="' + esc(p.weight == null ? 1 : p.weight) +
+              '" data-o-weight="' + esc(p.id) + '" aria-label="Share of traffic among seats serving the same model" style="width:5rem" />' +
+            '</dd></div>' +
+            '<div style="grid-column:1/-1"><dt>Models</dt><dd data-models-cell="' + esc(p.id) + '">' +
+              chips(p.models, 'none, so nothing routes here') +
+              ' <button type="button" class="link" data-o-sync="' + esc(p.id) + '">Sync from vendor</button>' +
+              ' <button type="button" class="link" data-o-edit="' + esc(p.id) + '">Edit</button>' +
+              ' <button type="button" class="link" data-o-clone="' + esc(p.id) + '">Add another seat</button>' +
+            '</dd></div>' +
+          '</dl></div>' +
+
+          '<div data-limits="' + esc(p.id) + '"></div>' +
+        '</div>';
       }).join('');
-      // Limits are fetched live from each vendor, so render the rows first and
-      // fill them in as the answers arrive rather than blocking the table.
-      providers.forEach((p) => renderLimits(p.id));
-      providers.forEach((p) => { if (!oauthQuota[p.id]) loadLimits(p.id); });
-      tb.querySelectorAll('[data-o-refresh]').forEach((btn) => {
-        btn.onclick = async () => {
-          btn.textContent = '…';
-          try {
-            await api('/oauth/' + btn.dataset.oRefresh + '/refresh', { method: 'POST' });
-          } catch (e) {
-            alert(e.message);
-          }
-          await refreshOAuth();
+
+      // Limits come live from each vendor, so the records render first and each
+      // fills in as its answer arrives rather than blocking the list.
+      providers.forEach(function (p) { renderLimits(p.id); });
+      providers.forEach(function (p) { if (!quotaCache[p.id]) loadLimits(p.id); });
+
+      all('[data-o-refresh]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          run(btn, async function () {
+            try {
+              await api('/oauth/' + btn.dataset.oRefresh + '/refresh', { method: 'POST' });
+              toast('Token refreshed');
+            } catch (e) { toast(e.message, 'bad'); }
+            await refreshOAuth();
+          });
         };
       });
-      tb.querySelectorAll('[data-o-reinstate]').forEach((btn) => {
-        btn.onclick = async () => {
-          btn.textContent = '…';
+
+      all('[data-o-reinstate]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          run(btn, async function () {
+            try {
+              await api('/oauth/' + btn.dataset.oReinstate + '/reinstate', { method: 'POST' });
+              toast(btn.dataset.oReinstate + ' is back in rotation');
+            } catch (e) { toast(e.message, 'bad'); }
+            await Promise.all([refreshOAuth(), refreshProviders()]);
+          });
+        };
+      });
+
+      all('[data-o-del]', box).forEach(function (btn) {
+        confirmable(btn, 'Delete credentials?', function () {
+          run(btn, async function () {
+            try {
+              await api('/providers/' + btn.dataset.oDel, { method: 'DELETE' });
+              toast(btn.dataset.oDel + ' disconnected');
+            } catch (e) {
+              // Leave the record in place: it is still connected if this failed.
+              toast(e.message, 'bad');
+              return;
+            }
+            await Promise.all([refreshOAuth(), refreshProviders()]);
+          });
+        });
+      });
+
+      all('[data-o-weight]', box).forEach(function (input) {
+        input.onchange = async function () {
           try {
-            await api('/oauth/' + btn.dataset.oReinstate + '/reinstate', { method: 'POST' });
+            await api('/oauth/' + input.dataset.oWeight + '/weight', {
+              method: 'POST',
+              body: JSON.stringify({ weight: Number(input.value) }),
+            });
+            toast('Weight set to ' + input.value + ' for ' + input.dataset.oWeight);
           } catch (e) {
-            oauthStatus(e.message, true);
+            toast(e.message, 'bad');
+            await refreshOAuth();
+          }
+        };
+      });
+
+      all('[data-o-sync]', box).forEach(function (btn) {
+        btn.onclick = async function () {
+          btn.disabled = true;
+          btn.textContent = 'Syncing...';
+          try {
+            var r = await api('/oauth/' + btn.dataset.oSync + '/models/sync', { method: 'POST' });
+            // A vendor with no list to publish is not an error, just a no-op.
+            toast(r.status === 'unchanged' ? r.message : 'Fetched ' + r.models.length + ' models from the vendor');
+          } catch (e) {
+            toast(e.message, 'bad');
           }
           await Promise.all([refreshOAuth(), refreshProviders()]);
         };
       });
-      tb.querySelectorAll('[data-o-clone]').forEach((btn) => {
-        btn.onclick = () => {
-          const p = providers.find((x) => x.id === btn.dataset.oClone);
+
+      all('[data-o-clone]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          var p = providers.filter(function (x) { return x.id === btn.dataset.oClone; })[0];
           if (p) prepareSiblingSeat(p, providers);
         };
       });
-      tb.querySelectorAll('[data-o-weight]').forEach((btn) => {
-        btn.onclick = async () => {
-          const p = providers.find((x) => x.id === btn.dataset.oWeight);
-          const next = prompt('Share of traffic among seats serving the same model (1-100):', String(p?.weight ?? 1));
-          if (next === null) return;
-          try {
-            await api('/oauth/' + btn.dataset.oWeight + '/weight', { method: 'POST', body: JSON.stringify({ weight: Number(next) }) });
-          } catch (e) { oauthStatus(e.message, true); return; }
-          await refreshOAuth();
-        };
-      });
-      tb.querySelectorAll('[data-o-sync]').forEach((btn) => {
-        btn.onclick = async () => {
-          const label = btn.textContent;
-          btn.textContent = 'Syncing…';
-          try {
-            const r = await api('/oauth/' + btn.dataset.oSync + '/models/sync', { method: 'POST' });
-            // A vendor with no list to publish is not an error, just a no-op.
-            oauthStatus(r.status === 'unchanged' ? r.message : 'Fetched ' + r.models.length + ' models from the vendor.', false);
-          } catch (e) {
-            btn.textContent = label;
-            oauthStatus(e.message, true);
-            return;
-          }
-          await Promise.all([refreshOAuth(), refreshProviders()]);
-        };
-      });
-      tb.querySelectorAll('[data-o-models]').forEach((btn) => {
-        btn.onclick = async () => {
-          const p = providers.find((x) => x.id === btn.dataset.oModels);
-          const current = JSON.stringify(p?.models || []);
-          const next = prompt('Models routed to this account (JSON array):', current);
-          if (next === null) return;
-          let models;
-          try {
-            models = parseJsonField(next, 'Models');
-          } catch (e) { alert(e.message); return; }
-          try {
-            await api('/oauth/' + btn.dataset.oModels + '/models', { method: 'POST', body: JSON.stringify({ models }) });
-            await Promise.all([refreshOAuth(), refreshProviders()]);
-          } catch (e) { alert(e.message); }
-        };
-      });
-      tb.querySelectorAll('[data-o-del]').forEach((btn) => {
-        btn.onclick = async () => {
-          if (!confirm('Disconnect ' + btn.dataset.oDel + '? The stored credentials are deleted.')) return;
-          try {
-            await api('/providers/' + btn.dataset.oDel, { method: 'DELETE' });
-          } catch (e) {
-            // Leave the row in place: it is still connected if the delete failed.
-            oauthStatus(e.message, true);
-            return;
-          }
-          await Promise.all([refreshOAuth(), refreshProviders()]);
+
+      // Editing happens in the record, on the value it changes. A prompt()
+      // dialog cannot show you what the current list is while you retype it.
+      all('[data-o-edit]', box).forEach(function (btn) {
+        btn.onclick = function () {
+          var id = btn.dataset.oEdit;
+          var p = providers.filter(function (x) { return x.id === id; })[0];
+          var cell = box.querySelector('[data-models-cell="' + CSS.escape(id) + '"]');
+          if (!p || !cell) return;
+          cell.innerHTML = '<div class="row" style="gap:var(--s-2)">' +
+            '<input class="o-edit-input" value="" style="flex:1 1 18rem" aria-label="Models routed to this account, as a JSON array" />' +
+            '<button type="button" class="btn btn--sm o-edit-save">Save</button>' +
+            '<button type="button" class="btn btn--quiet btn--sm o-edit-cancel">Cancel</button>' +
+            '</div><p class="field__hint">A JSON array of model names.</p>';
+          var input = cell.querySelector('.o-edit-input');
+          input.value = JSON.stringify(p.models || []);
+          input.focus();
+          input.select();
+          cell.querySelector('.o-edit-cancel').onclick = function () { refreshOAuth(); };
+          cell.querySelector('.o-edit-save').onclick = function (e) {
+            var models;
+            try { models = parseModels(input.value); }
+            catch (err) { toast('Models must be a JSON array, for example ["gpt-5"].', 'bad'); return; }
+            run(e.currentTarget, async function () {
+              try {
+                await api('/oauth/' + id + '/models', { method: 'POST', body: JSON.stringify({ models: models }) });
+                toast('Models updated for ' + id);
+                await Promise.all([refreshOAuth(), refreshProviders()]);
+              } catch (err2) { toast(err2.message, 'bad'); }
+            });
+          };
         };
       });
     }
 
-    function fmt(n) {
-      const x = Number(n) || 0;
-      if (x >= 1e6) return (x / 1e6).toFixed(1) + 'M';
-      if (x >= 1e3) return (x / 1e3).toFixed(1) + 'k';
-      return String(x);
+    /* ------------------------------------------------------------ API keys */
+
+    /**
+     * A key's consumption against one of its limits.
+     *
+     * Rendered even with no limit set, because "142k used, no cap" is still what
+     * the owner wants to know. The meter appears only when there is a ceiling
+     * for it to be a fraction of.
+     */
+    function limitCell(used, limit, unit) {
+      var u = Number(used) || 0;
+      if (limit == null) {
+        return '<div class="mono">' + fmt(u) + '</div><div class="muted">' + esc(unit) + ', no cap</div>';
+      }
+      var pct = limit > 0 ? Math.min(100, (u / limit) * 100) : 0;
+      return '<div class="mono">' + fmt(u) + ' <span class="muted">of ' + fmt(limit) + '</span></div>' +
+        meter(pct) + '<div class="muted">' + esc(unit) + '</div>';
     }
 
+    async function refreshKeys() {
+      var body = $('keys-body');
+      if (!body.children.length) body.innerHTML = skeletonRows(3, 5);
+      var data = await api('/api-keys');
+      var active = (data.api_keys || []).filter(function (k) { return k.is_active; });
+      $('keys-count').textContent = active.length;
+
+      if (!active.length) {
+        body.innerHTML = '<tr><td colspan="5">' + emptyState(
+          'No keys yet',
+          'Create one above, then send it as <code>Authorization: Bearer sk-...</code> to <code>' +
+          esc(location.origin) + '/v1</code>.'
+        ) + '</td></tr>';
+        return;
+      }
+
+      body.innerHTML = active.map(function (k) {
+        return '<tr>' +
+          '<td class="mono nowrap">' + esc(k.key_prefix) + '&hellip;</td>' +
+          '<td>' + (esc(k.label) || '<span class="muted">no label</span>') +
+            (k.user_email && me.role === 'admin' ? '<div class="muted">' + esc(k.user_email) + '</div>' : '') + '</td>' +
+          '<td style="min-width:8rem">' + limitCell(k.last_minute_requests, k.rpm_limit, 'requests') + '</td>' +
+          '<td style="min-width:8rem">' + limitCell(k.month_tokens, k.monthly_token_limit, 'tokens') + '</td>' +
+          '<td><button type="button" class="btn btn--danger btn--sm" data-revoke="' + esc(k.id) + '">Revoke</button></td>' +
+        '</tr>';
+      }).join('');
+      paintMeters(body);
+
+      all('[data-revoke]', body).forEach(function (btn) {
+        confirmable(btn, 'Revoke for good?', function () {
+          run(btn, async function () {
+            try {
+              await api('/api-keys/' + btn.dataset.revoke, { method: 'DELETE' });
+              toast('Key revoked. Anything using it will start failing.');
+            } catch (e) { toast(e.message, 'bad'); }
+            await refreshKeys();
+          });
+        });
+      });
+    }
+
+    $('k-create').onclick = function () {
+      run($('k-create'), async function () {
+        try {
+          var data = await api('/api-keys', {
+            method: 'POST',
+            body: JSON.stringify({
+              label: $('k-label').value.trim(),
+              rpm_limit: $('k-rpm').value ? parseInt($('k-rpm').value, 10) : null,
+              monthly_token_limit: $('k-tokens').value ? parseInt($('k-tokens').value, 10) : null,
+            }),
+          });
+          $('k-reveal-text').textContent = data.api_key;
+          $('k-reveal').hidden = false;
+          $('k-label').value = '';
+          await refreshKeys();
+        } catch (e) {
+          toast(e.message || 'Could not create the key', 'bad');
+        }
+      });
+    };
+
+    /* --------------------------------------------------------------- usage */
     async function refreshUsage() {
-      const data = await api('/usage?days=' + ($('usage-days').value || 30));
-      const s = data.summary || {};
-      const tok = (Number(s.prompt_tokens) || 0) + (Number(s.completion_tokens) || 0);
-      $('usage-stats').innerHTML = `
-        <div class="stat"><b>${fmt(s.requests)}</b><small>Requests</small></div>
-        <div class="stat"><b>${fmt(tok)}</b><small>Tokens</small></div>
-        <div class="stat"><b>${fmt(s.prompt_tokens)}</b><small>Input</small></div>
-        <div class="stat"><b>${fmt(s.completion_tokens)}</b><small>Output</small></div>`;
-      const days = data.by_day || [];
-      const max = Math.max(1, ...days.map((d) => Number(d.requests) || 0));
-      $('usage-chart').innerHTML = days.map((d) => `<div class="bar" style="height:${Math.round(((Number(d.requests) || 0) / max) * 100)}%" title="${d.day}"></div>`).join('') || '<span class="muted">No data</span>';
-      $('usage-by-provider').innerHTML = (data.by_provider || []).map((r) => `<tr><td>${r.provider}</td><td class="num">${fmt(r.requests)}</td><td class="num">${fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0))}</td></tr>`).join('');
-      $('usage-by-key').innerHTML = (data.by_api_key || []).map((r) => `<tr><td>${r.label || r.key_prefix + '…'}${r.user_email ? '<br><span class="muted">' + r.user_email + '</span>' : ''}</td><td class="num">${fmt(r.requests)}</td><td class="num">${fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0))}</td></tr>`).join('');
-      $('usage-by-model').innerHTML = (data.by_model || []).map((r) => `<tr><td style="font-family:var(--mono);font-size:0.7rem">${r.model}</td><td>${r.provider}</td><td class="num">${fmt(r.requests)}</td></tr>`).join('');
+      var data = await api('/usage?days=' + ($('usage-days').value || 30));
+      var s = data.summary || {};
+      var tokens = (Number(s.prompt_tokens) || 0) + (Number(s.completion_tokens) || 0);
+
+      // One headline figure with its parts beside it, rather than four
+      // identical tiles that give equal weight to a total and its components.
+      $('usage-figures').innerHTML =
+        '<div><span class="figure__value">' + fmt(s.requests) + '</span><span class="figure__label">Requests</span></div>' +
+        '<div class="figure--sub"><span class="figure__value">' + fmt(tokens) + '</span><span class="figure__label">Tokens</span></div>' +
+        '<div class="figure--sub"><span class="figure__value">' + fmt(s.prompt_tokens) + '</span><span class="figure__label">In</span></div>' +
+        '<div class="figure--sub"><span class="figure__value">' + fmt(s.completion_tokens) + '</span><span class="figure__label">Out</span></div>';
+
+      var days = data.by_day || [];
+      var max = Math.max.apply(null, [1].concat(days.map(function (d) { return Number(d.requests) || 0; })));
+      $('usage-chart').innerHTML = days.length
+        ? days.map(function (d) {
+            var n = Number(d.requests) || 0;
+            return '<div class="chart__bar" data-empty="' + (n === 0) + '" style="height:' +
+              Math.max(2, Math.round((n / max) * 100)) + '%" title="' + esc(d.day) + ': ' + n + ' requests"></div>';
+          }).join('')
+        : '<p class="muted">Nothing recorded in this period.</p>';
+
+      var row = function (cells) { return '<tr>' + cells + '</tr>'; };
+      var noneRow = function (cols) {
+        return '<tr><td colspan="' + cols + '" class="muted">Nothing yet.</td></tr>';
+      };
+
+      $('usage-providers').innerHTML = (data.by_provider || []).map(function (r) {
+        return row('<td>' + esc(r.provider) + '</td><td class="num">' + fmt(r.requests) + '</td><td class="num">' +
+          fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0)) + '</td>');
+      }).join('') || noneRow(3);
+
+      $('usage-keys').innerHTML = (data.by_api_key || []).map(function (r) {
+        return row('<td>' + esc(r.label || r.key_prefix + '…') +
+          (r.user_email ? '<div class="muted">' + esc(r.user_email) + '</div>' : '') +
+          '</td><td class="num">' + fmt(r.requests) + '</td><td class="num">' +
+          fmt((+r.prompt_tokens || 0) + (+r.completion_tokens || 0)) + '</td>');
+      }).join('') || noneRow(3);
+
+      $('usage-models').innerHTML = (data.by_model || []).map(function (r) {
+        return row('<td class="mono">' + esc(r.model) + '<div class="muted">' + esc(r.provider) + '</div></td>' +
+          '<td class="num">' + fmt(r.requests) + '</td>');
+      }).join('') || noneRow(2);
     }
 
     async function refreshLogs() {
-      const filter = $('logs-filter').value;
-      const { logs } = await api('/logs?limit=50' + (filter === 'error' ? '&status=error' : ''));
-      const tb = $('logs-tbody');
+      var body = $('logs-body');
+      if (!body.children.length) body.innerHTML = skeletonRows(5, 6);
+      var filter = $('logs-filter').value;
+      var data = await api('/logs?limit=50' + (filter === 'error' ? '&status=error' : ''));
+      var logs = data.logs || [];
+
       if (!logs.length) {
-        tb.innerHTML = '<tr><td colspan="6" class="muted">No requests recorded yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="6">' + emptyState(
+          filter === 'error' ? 'No failures recorded' : 'No requests yet',
+          filter === 'error'
+            ? 'Nothing in the last 50 requests came back as an error.'
+            : 'Once something calls <code>/v1</code> with one of your keys, every attempt shows up here, successful or not.'
+        ) + '</td></tr>';
         return;
       }
-      tb.innerHTML = logs.map((l) => {
+
+      body.innerHTML = logs.map(function (l) {
         // A NULL status is a row from before outcomes were recorded, and those
         // were only ever written on success.
-        const status = l.status_code == null ? 200 : l.status_code;
-        const ok = status < 400;
-        const outcome = ok
-          ? `<span class="badge badge-live">${status}</span>`
-          : `<span class="badge" style="background:var(--danger-bg);color:var(--danger)">${status}</span>`;
-        const detail = !ok && l.error_message
-          ? `<div class="muted" style="font-size:0.7rem;max-width:32rem">${esc(l.error_message)}</div>`
-          : '';
-        const tokens = (Number(l.prompt_tokens) || 0) + (Number(l.completion_tokens) || 0);
-        return `<tr>
-          <td style="font-size:0.7rem;white-space:nowrap">${esc(new Date(l.created_at + 'Z').toLocaleString())}${l.user_email ? '<br><span class="muted">' + esc(l.user_email) + '</span>' : ''}</td>
-          <td style="font-family:var(--mono);font-size:0.7rem">${esc(l.model)}</td>
-          <td style="font-size:0.75rem">${esc(l.provider)}</td>
-          <td>${outcome}${detail}</td>
-          <td class="num">${tokens ? fmt(tokens) : '—'}</td>
-          <td class="num">${l.duration_ms == null ? '—' : fmt(l.duration_ms)}</td>
-        </tr>`;
+        var status = l.status_code == null ? 200 : l.status_code;
+        var ok = status < 400;
+        var tokens = (Number(l.prompt_tokens) || 0) + (Number(l.completion_tokens) || 0);
+        return '<tr>' +
+          '<td class="nowrap">' + esc(new Date(l.created_at + 'Z').toLocaleString()) +
+            (l.user_email ? '<div class="muted">' + esc(l.user_email) + '</div>' : '') + '</td>' +
+          '<td class="mono">' + esc(l.model) + '</td>' +
+          '<td>' + esc(l.provider) + '</td>' +
+          '<td><span class="badge ' + (ok ? 'badge--ok' : 'badge--danger') + '">' + status + '</span>' +
+            (!ok && l.error_message
+              ? '<div class="muted" style="max-width:34rem">' + esc(l.error_message) + '</div>' : '') + '</td>' +
+          '<td class="num">' + (tokens ? fmt(tokens) : '&mdash;') + '</td>' +
+          '<td class="num">' + (l.duration_ms == null ? '&mdash;' : fmt(l.duration_ms)) + '</td>' +
+        '</tr>';
       }).join('');
     }
 
+    $('usage-days').onchange = function () { run($('usage-refresh'), refreshUsage); };
+    $('usage-refresh').onclick = function () { run($('usage-refresh'), refreshUsage); };
+    $('logs-filter').onchange = function () { run($('logs-refresh'), refreshLogs); };
+    $('logs-refresh').onclick = function () { run($('logs-refresh'), refreshLogs); };
+
+    /* --------------------------------------------------------------- users */
     async function refreshUsers() {
-      if (currentUser?.role !== 'admin') return;
-      const [{ users }, { invites }] = await Promise.all([api('/users'), api('/invites')]);
-      // Shared with the Providers panel, which offers these when assigning
-      // which account a metered provider bills to.
-      knownUsers = (users || []).filter((u) => u.is_active);
-      $('users-tbody').innerHTML = (users || []).map((u) =>
-        `<tr><td>${u.email}</td><td>${u.role}</td><td>${u.is_active ? 'yes' : 'no'}</td>
-        <td>${u.id === currentUser?.userId ? '<span class="muted">you</span>' : `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-user-del="${u.id}">Delete</button>`}</td></tr>`
-      ).join('') || '<tr><td colspan="4" class="muted">No users.</td></tr>';
-      $('users-tbody').querySelectorAll('[data-user-del]').forEach((btn) => {
-        btn.onclick = async () => {
-          if (!confirm('Delete this user? Their API keys will be revoked.')) return;
-          await api('/users/' + btn.dataset.userDel, { method: 'DELETE' });
-          await refreshUsers();
-          await refreshKeys();
-        };
-      });
+      if (!me || me.role !== 'admin') return;
+      var results = await Promise.all([api('/users'), api('/invites')]);
+      var users = results[0].users || [];
+      var invites = results[1].invites || [];
 
-      $('invites-tbody').innerHTML = (invites || []).map((i) => {
-        const inactive = !i.is_active || i.used_count >= i.max_uses;
-        return `<tr><td>${i.label || '—'}</td><td>${i.used_count}/${i.max_uses}${!i.is_active ? '<br><span class="muted">disabled</span>' : ''}</td><td>${inactive ? '<span class="muted">—</span>' : `<button type="button" class="btn btn-secondary" style="padding:0.35rem 0.65rem;font-size:0.75rem" data-invite-del="${i.id}">Disable</button>`}</td></tr>`;
-      }).join('') || '<tr><td colspan="3" class="muted">No invites.</td></tr>';
-      $('invites-tbody').querySelectorAll('[data-invite-del]').forEach((btn) => {
-        btn.onclick = async () => {
-          await api('/invites/' + btn.dataset.inviteDel, { method: 'DELETE' });
-          await refreshUsers();
-        };
-      });
-    }
+      // Shared with the Providers panel, which offers these when choosing which
+      // account a metered provider bills to.
+      knownUsers = users.filter(function (u) { return u.is_active; });
+      $('users-count').textContent = users.length;
+      $('invites-count').textContent = invites.length;
 
-    async function enterApp(session) {
-      currentUser = session || await api('/session');
-      $('login-screen').classList.add('hidden');
-      $('app').classList.remove('hidden');
-      applyRoleUI();
-      await loadCatalog();
-      await Promise.all([refreshProviders(), refreshKeys(), refreshUsage(), refreshLogs(), refreshUsers(), loadOAuthVendors().then(refreshOAuth)]);
-    }
+      $('users-body').innerHTML = users.map(function (u) {
+        return '<tr>' +
+          '<td>' + esc(u.email) + (u.is_active ? '' : ' <span class="badge">disabled</span>') + '</td>' +
+          '<td><span class="badge' + (u.role === 'admin' ? ' badge--accent' : '') + '">' + esc(u.role) + '</span></td>' +
+          '<td>' + (u.id === me.userId
+            ? '<span class="muted">you</span>'
+            : '<button type="button" class="btn btn--danger btn--sm" data-user-del="' + esc(u.id) + '">Delete</button>') +
+          '</td></tr>';
+      }).join('') || '<tr><td colspan="3" class="muted">No users.</td></tr>';
 
-    $('login-btn').onclick = async () => {
-      $('login-err').classList.add('hidden');
-      try {
-        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
-        await enterApp(session);
-      } catch (e) {
-        $('login-err').textContent = e.message;
-        $('login-err').classList.remove('hidden');
-      }
-    };
-
-    $('signup-btn').onclick = async () => {
-      $('login-err').classList.add('hidden');
-      try {
-        await api('/signup', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value, invite_code: $('invite-code').value }) });
-        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
-        await enterApp(session);
-      } catch (e) {
-        $('login-err').textContent = e.message;
-        $('login-err').classList.remove('hidden');
-      }
-    };
-
-    $('setup-btn').onclick = async () => {
-      $('login-err').classList.add('hidden');
-      try {
-        await api('/setup', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
-        const session = await api('/login', { method: 'POST', body: JSON.stringify({ email: $('email').value, password: $('password').value }) });
-        await enterApp(session);
-      } catch (e) {
-        $('login-err').textContent = e.message;
-        $('login-err').classList.remove('hidden');
-      }
-    };
-
-    async function logout() {
-      await api('/logout', { method: 'POST' });
-      currentUser = null;
-      $('app').classList.add('hidden');
-      $('login-screen').classList.remove('hidden');
-      setSignupMode(false);
-    }
-    $('logout-btn').onclick = logout;
-    $('logout-mobile-btn').onclick = logout;
-
-    $('save-provider').onclick = async () => {
-      let models = [];
-      try {
-        const raw = $('p-models').value.trim();
-        if (raw) models = JSON.parse(raw);
-      } catch { alert('Invalid JSON for prefixes'); return; }
-      await api('/providers', { method: 'POST', body: JSON.stringify({ id: $('p-id').value, name: $('p-name').value, api_key: $('p-key').value, models }) });
-      $('p-key').value = '';
-      await refreshProviders();
-    };
-
-    $('create-key').onclick = async () => {
-      const btn = $('create-key');
-      const original = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Creating…';
-      try {
-        const data = await api('/api-keys', {
-          method: 'POST',
-          body: JSON.stringify({
-            label: $('k-label').value,
-            rpm_limit: $('k-rpm').value ? parseInt($('k-rpm').value, 10) : null,
-            monthly_token_limit: $('k-tokens').value ? parseInt($('k-tokens').value, 10) : null,
-          }),
+      all('[data-user-del]', $('users-body')).forEach(function (btn) {
+        confirmable(btn, 'Delete and revoke keys?', function () {
+          run(btn, async function () {
+            try {
+              await api('/users/' + btn.dataset.userDel, { method: 'DELETE' });
+              toast('User deleted and their API keys revoked');
+            } catch (e) { toast(e.message, 'bad'); }
+            await Promise.all([refreshUsers(), refreshKeys()]);
+          });
         });
-        $('new-key-box').classList.remove('hidden');
-        $('new-key-text').textContent = data.api_key;
-        await refreshKeys();
-      } catch (e) {
-        alert(e.message || 'Failed to create API key');
-      } finally {
-        btn.disabled = false;
-        btn.textContent = original;
-      }
+      });
+
+      $('invites-body').innerHTML = invites.map(function (i) {
+        var spent = !i.is_active || i.used_count >= i.max_uses;
+        return '<tr>' +
+          '<td>' + (esc(i.label) || '<span class="muted">no label</span>') + '</td>' +
+          '<td class="mono">' + esc(i.used_count) + ' / ' + esc(i.max_uses) +
+            (i.is_active ? '' : '<div class="muted">disabled</div>') + '</td>' +
+          '<td>' + (spent ? '<span class="muted">spent</span>'
+            : '<button type="button" class="btn btn--secondary btn--sm" data-invite-del="' + esc(i.id) + '">Disable</button>') +
+          '</td></tr>';
+      }).join('') || '<tr><td colspan="3" class="muted">No invites.</td></tr>';
+
+      all('[data-invite-del]', $('invites-body')).forEach(function (btn) {
+        confirmable(btn, 'Disable it?', function () {
+          run(btn, async function () {
+            try {
+              await api('/invites/' + btn.dataset.inviteDel, { method: 'DELETE' });
+              toast('Invite disabled');
+            } catch (e) { toast(e.message, 'bad'); }
+            await refreshUsers();
+          });
+        });
+      });
+    }
+
+    $('i-create').onclick = function () {
+      run($('i-create'), async function () {
+        try {
+          var data = await api('/invites', {
+            method: 'POST',
+            body: JSON.stringify({
+              label: $('invite-label').value.trim(),
+              max_uses: $('invite-max').value ? parseInt($('invite-max').value, 10) : 1,
+            }),
+          });
+          $('i-reveal-code').textContent = data.invite_code;
+          $('i-reveal-url').textContent = location.origin + '/admin/dashboard?invite=' +
+            encodeURIComponent(data.invite_code);
+          $('i-reveal').hidden = false;
+          $('invite-label').value = '';
+          await refreshUsers();
+        } catch (e) {
+          toast(e.message || 'Could not create the invite', 'bad');
+        }
+      });
     };
 
-    $('copy-key-btn').onclick = () => navigator.clipboard?.writeText($('new-key-text').textContent);
-    $('copy-invite-btn').onclick = () => navigator.clipboard?.writeText($('new-invite-text').textContent);
-    $('copy-invite-url-btn').onclick = () => navigator.clipboard?.writeText($('new-invite-url').textContent);
+    /* ----------------------------------------------------------------- boot */
+    async function enterApp(session) {
+      me = session || await api('/session');
+      $('auth').hidden = true;
+      $('app').hidden = false;
+      applyRole();
 
-    $('create-invite').onclick = async () => {
+      if (me.role === 'admin') await loadCatalog();
+      // Users first: the Providers panel renders a billing account picker from
+      // that list, so it has to be populated before those records are drawn.
+      await refreshUsers();
+      await Promise.all([
+        refreshProviders(),
+        refreshKeys(),
+        refreshUsage(),
+        refreshLogs(),
+        loadVendors().then(refreshOAuth),
+      ]);
+    }
+
+    (async function boot() {
+      var bootParams = new URLSearchParams(location.search);
+      var invite = bootParams.get('invite');
+      var oauthCode = bootParams.get('oauth_code');
+      var oauthState = bootParams.get('oauth_state');
+      var oauthError = bootParams.get('oauth_error');
+
+      if (invite) {
+        setAuthMode('signup');
+        $('invite-code').value = invite;
+        try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+      } else {
+        setAuthMode('login');
+      }
+      if (oauthCode || oauthError) {
+        try { history.replaceState(null, '', location.pathname); } catch (e) { /* ignore */ }
+      }
+
+      var status = await fetch('/admin/setup/status', { credentials: 'include' })
+        .then(function (r) { return r.json(); })
+        .catch(function () { return {}; });
+      if (status.needs_setup) setAuthMode('setup');
+
       try {
-        const data = await api('/invites', { method: 'POST', body: JSON.stringify({ label: $('invite-label').value, max_uses: $('invite-max').value ? parseInt($('invite-max').value, 10) : 1 }) });
-        const origin = window.location.origin;
-        const inviteUrl = `${origin}/admin/dashboard?invite=${encodeURIComponent(data.invite_code)}`;
-
-        $('new-invite-box').classList.remove('hidden');
-        $('new-invite-text').textContent = data.invite_code;
-        $('new-invite-url').textContent = inviteUrl;
-        await refreshUsers();
-      } catch (e) {
-        alert(e.message || 'Failed to create invite');
-      }
-    };
-    $('usage-days').onchange = refreshUsage;
-    $('refresh-usage').onclick = refreshUsage;
-    $('logs-filter').onchange = refreshLogs;
-    $('refresh-logs').onclick = refreshLogs;
-
-    (async () => {
-      // Pre-fill invite from URL if present (?invite=inv-...)
-      const inviteParam = new URLSearchParams(location.search).get('invite');
-      if (inviteParam) {
-        setSignupMode(true);
-        $('invite-code').value = inviteParam;
-        // Clean the URL
-        history.replaceState(null, '', location.pathname);
-      }
-
-      const st = await fetch('/admin/setup/status', { credentials: 'include' }).then((r) => r.json()).catch(() => ({}));
-      if (st.needs_setup) {
-        $('setup-block').classList.remove('hidden');
-        $('setup-btn').classList.remove('hidden');
-        $('signup-mode-btn').classList.add('hidden');
-        $('login-title').textContent = 'Setup';
-      }
-      try {
-        const session = await api('/session');
+        var session = await api('/session');
         await enterApp(session);
-      } catch { /* show login */ }
+        if (oauthError) {
+          toast('Authorization failed: ' + oauthError, 'bad');
+        } else if (oauthCode && oauthState) {
+          await completeOAuthFromRedirect(oauthState, oauthCode);
+        }
+      } catch (e) {
+        $('auth').hidden = false;
+        $('email').focus();
+      }
     })();
+  })();
   </script>
 </body>
 </html>
