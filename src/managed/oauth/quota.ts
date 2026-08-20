@@ -69,6 +69,15 @@ export async function getJson<T>(
   });
   const text = await res.text();
   if (!res.ok) {
+    // A vendor edge that blocks the request outright (bot detection, a WAF
+    // challenge) answers with a styled HTML page, not their API's error
+    // shape. Dumping that markup into the dashboard is noise; naming what it
+    // is tells the operator this isn't a token or scope problem to fix here.
+    if (/^\s*<(!doctype|html)/i.test(text)) {
+      throw new Error(
+        `Usage lookup blocked (${res.status}): the vendor returned an HTML page instead of an API response, which usually means automated-traffic detection on their edge rather than an error with this seat's credentials.`,
+      );
+    }
     throw new Error(
       `Usage lookup failed (${res.status}): ${text.slice(0, 200)}`,
     );

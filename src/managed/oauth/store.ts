@@ -247,8 +247,14 @@ export async function resolveOAuthCredential(
     } catch (e) {
       // The claim stays bumped, so the next request re-claims and retries
       // rather than reusing the refresh token we just spent.
-      lastRefreshError =
-        e instanceof Error ? e.message : 'Token refresh failed';
+      const raw = e instanceof Error ? e.message : 'Token refresh failed';
+      // `invalid_grant` means the vendor revoked or expired the refresh
+      // token itself, not a transient failure — retrying gets the same
+      // answer forever. Naming that distinguishes it from every other error
+      // here, which the operator can wait out.
+      lastRefreshError = /invalid_grant/i.test(raw)
+        ? `${raw} — the refresh token was revoked or expired at the vendor. Retrying will not fix this; reconnect the seat from Subscriptions.`
+        : raw;
       return {
         ok: false,
         error: { kind: 'refresh_failed', message: lastRefreshError },
