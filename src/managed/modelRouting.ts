@@ -98,6 +98,62 @@ function normalizedStartsWith(model: string, prefix: string): boolean {
   return m === p || m.startsWith(p);
 }
 
+export type ExplicitTarget = { providerId: string; model: string };
+
+/**
+ * `provider_id/model` addressing: a caller naming exactly which provider row
+ * to use instead of leaving it to prefix matching and weighted selection.
+ *
+ * Recognised only when the segment before the slash is a real, visible
+ * provider id, never as a general "has a slash" rule — an org-qualified model
+ * name like `qwen/qwen3-32b` (a real Groq model) must not be mistaken for one.
+ */
+export function parseExplicitTarget(
+  model: string,
+  providerIds: string[]
+): ExplicitTarget | null {
+  const idx = model.indexOf('/');
+  if (idx <= 0) return null;
+  const providerId = model.slice(0, idx);
+  if (!providerIds.includes(providerId)) return null;
+  const rest = model.slice(idx + 1);
+  if (!rest) return null;
+  return { providerId, model: rest };
+}
+
+/**
+ * Short, vendor-level names for `alias/model` addressing.
+ *
+ * `provider_id/model` (above) pins to one exact row and gives up failover —
+ * right when you deliberately want a specific seat, wrong when you just
+ * connected a second seat on the same vendor and want the short name to keep
+ * meaning "either of them, whichever is healthy". An alias resolves to every
+ * provider row for that vendor instead of one id, so it stays valid as seats
+ * are added or removed and never leaks a provider's internal id (its own
+ * `-sub` suffix, or whatever an operator named it) into a model string.
+ */
+export const VENDOR_ALIASES: Record<string, string> = {
+  codex: 'openai-codex',
+  claude: 'anthropic-claude-code',
+  grok: 'xai-grok-cli',
+  anti: 'google-antigravity',
+  antigravity: 'google-antigravity',
+  kimi: 'kimi-code',
+};
+
+export type AliasTarget = { alias: string; vendor: string; model: string };
+
+export function parseVendorAlias(model: string): AliasTarget | null {
+  const idx = model.indexOf('/');
+  if (idx <= 0) return null;
+  const alias = model.slice(0, idx).toLowerCase();
+  const vendor = VENDOR_ALIASES[alias];
+  if (!vendor) return null;
+  const rest = model.slice(idx + 1);
+  if (!rest) return null;
+  return { alias, vendor, model: rest };
+}
+
 export function parseModelsJson(models: string): string[] {
   try {
     const parsed = JSON.parse(models);
