@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>AI Gateway</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!--THEME-->
+</head>
+<body>
+  <main class="marquee-page">
+    <div class="marquee">
+      <div class="brand">
+        <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+          <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+        </svg>
+        <span class="brand__name">Gateway<span class="brand__sub">Managed proxy</span></span>
+      </div>
+
+      <h1>One endpoint in front of every model you already pay for.</h1>
+      <p class="marquee__lead">
+        An OpenAI-compatible proxy that routes each request to the right provider, serves it
+        from a metered API key or a subscription seat, and steps aside to another credential
+        when one runs out of quota.
+      </p>
+
+      <dl class="marquee__facts">
+        <div class="marquee__fact">
+          <dt>Status</dt>
+          <dd id="status">
+            <span class="badge skeleton">checking</span>
+          </dd>
+        </div>
+        <div class="marquee__fact">
+          <dt>Base URL</dt>
+          <dd><code id="base-url" class="mono"></code></dd>
+        </div>
+        <div class="marquee__fact">
+          <dt>Auth</dt>
+          <dd><code class="mono">Authorization: Bearer sk-&hellip;</code></dd>
+        </div>
+        <div class="marquee__fact">
+          <dt>Surface</dt>
+          <dd><code class="mono">/v1/chat/completions</code>, <code class="mono">/v1/messages</code>, <code class="mono">/v1/embeddings</code> and the rest of <code class="mono">/v1</code></dd>
+        </div>
+      </dl>
+
+      <div class="row" style="margin-top: var(--s-6); gap: var(--s-3)">
+        <a class="btn" href="/admin/dashboard">Open dashboard</a>
+        <a class="btn btn--secondary" href="/docs">API docs</a>
+        <a class="btn btn--secondary" href="/quota">Subscription quota</a>
+        <span class="spacer"></span>
+        <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch theme" title="Switch theme">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    /* Theme: the OS preference decides until someone says otherwise, and then
+       their choice is what persists. Shared verbatim across all three pages. */
+    (function theme() {
+      var saved = null;
+      try { saved = localStorage.getItem('gw-theme'); } catch (e) { /* private mode */ }
+      var mq = window.matchMedia('(prefers-color-scheme: dark)');
+      var apply = function (mode) {
+        document.documentElement.dataset.theme = mode === 'dark' ? 'dark' : 'light';
+      };
+      apply(saved || (mq.matches ? 'dark' : 'light'));
+      mq.addEventListener('change', function (e) {
+        if (!saved) apply(e.matches ? 'dark' : 'light');
+      });
+      var btn = document.getElementById('theme-toggle');
+      if (btn) btn.addEventListener('click', function () {
+        saved = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+        try { localStorage.setItem('gw-theme', saved); } catch (e) { /* ignore */ }
+        apply(saved);
+      });
+    })();
+
+    document.getElementById('base-url').textContent = location.origin + '/v1';
+
+    /* The status line is the only claim on this page that could be wrong, so it
+       is read from /health rather than asserted. */
+    fetch('/health')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        var ok = d.status === 'ok';
+        var db = d.managed_proxy;
+        document.getElementById('status').innerHTML = ok
+          ? '<span class="badge badge--ok"><span class="badge__pulse"></span>Serving</span>' +
+            (db ? '' : ' <span class="badge badge--warn">No database bound &mdash; managed routing is off</span>')
+          : '<span class="badge badge--danger">Unhealthy</span>';
+      })
+      .catch(function () {
+        document.getElementById('status').innerHTML =
+          '<span class="badge badge--danger">Unreachable</span>';
+      });
+  </script>
+</body>
+</html>

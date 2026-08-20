@@ -22,6 +22,9 @@ import type { ManagedEnv } from './managed/types';
 import { createAdminApp } from './managed/adminRoutes';
 import adminDashboardHtml from './public/admin-dashboard.html';
 import quotaHtml from './public/quota.html';
+import landingHtml from './public/landing.html';
+import docsHtml from './public/docs.html';
+import themeCss from './public/theme.css';
 
 // Handlers
 import { proxyHandler } from './handlers/proxyHandler';
@@ -50,6 +53,30 @@ import conf from '../conf.json';
 import { createCacheBackendsRedis } from './shared/services/cache';
 
 // Create a new Hono server instance
+/**
+ * Every page the Worker serves shares one stylesheet, inlined at module load.
+ *
+ * Inlining costs a few KB per page and saves a round trip on a cold start,
+ * which matters more here than on a busy site: these pages are opened rarely,
+ * so a separate CSS request would miss the browser cache almost every time.
+ * Done once at module scope, never per request.
+ */
+const THEME_SLOT = '<!--THEME-->';
+const withTheme = (html: string) =>
+  html.includes(THEME_SLOT)
+    ? html.replace(THEME_SLOT, `<style>${themeCss}</style>`)
+    : html.replace('</head>', `<style>${themeCss}</style></head>`);
+
+const adminPage = withTheme(adminDashboardHtml);
+const quotaPage = withTheme(quotaHtml);
+const landingPage = withTheme(landingHtml);
+const docsPage = withTheme(docsHtml);
+
+const PAGE_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Cache-Control': 'no-store, no-cache, must-revalidate',
+};
+
 const app = new Hono();
 const runtime = getRuntimeKey();
 
@@ -96,7 +123,7 @@ if (runtime === 'node') {
  * GET route for the root path.
  * Returns a greeting message.
  */
-app.get('/', (c) => c.text('AI Gateway says hey!'));
+app.get('/', (c) => c.html(landingPage, 200, PAGE_HEADERS));
 
 app.get('/health', async (c) => {
   const env = c.env as { DB?: D1Database };
@@ -119,10 +146,7 @@ app.get('/health', async (c) => {
 const adminApp = createAdminApp();
 app.route('/admin', adminApp);
 app.get('/admin/dashboard', (c) =>
-  c.html(adminDashboardHtml, 200, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-  })
+  c.html(adminPage, 200, PAGE_HEADERS)
 );
 
 /**
@@ -133,11 +157,15 @@ app.get('/admin/dashboard', (c) =>
  * sign in rather than anyone else's limits.
  */
 app.get('/quota', (c) =>
-  c.html(quotaHtml, 200, {
-    'Content-Type': 'text/html; charset=utf-8',
-    'Cache-Control': 'no-store, no-cache, must-revalidate',
-  })
+  c.html(quotaPage, 200, PAGE_HEADERS)
 );
+
+/**
+ * Public API docs and a live request console. No admin session required —
+ * unlike /admin/dashboard and /quota, this page carries no account data of
+ * its own; the console sends requests with a key the visitor types in.
+ */
+app.get('/docs', (c) => c.html(docsPage, 200, PAGE_HEADERS));
 
 // Managed proxy: user API keys, routing, provider credentials (before route handlers)
 app.use('*', managedProxyMiddleware);
