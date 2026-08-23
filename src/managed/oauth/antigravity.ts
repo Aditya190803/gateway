@@ -125,8 +125,13 @@ async function postForm(form: Record<string, string>): Promise<TokenResponse> {
     );
   }
   if (parsed.error) {
+    // Keep the vendor's error code in the message even when a description
+    // exists — `invalid_grant` is matched downstream to tell the operator
+    // reconnecting is required rather than retrying.
     throw new Error(
-      `Antigravity token request failed: ${parsed.error_description ?? parsed.error}`,
+      `Antigravity token request failed: ${parsed.error}${
+        parsed.error_description ? ` (${parsed.error_description})` : ''
+      }`
     );
   }
   if (!res.ok) {

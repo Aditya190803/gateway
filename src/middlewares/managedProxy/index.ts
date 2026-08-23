@@ -82,10 +82,21 @@ async function extractModelFromRequest(c: Context): Promise<string | null> {
  * model name it doesn't recognise.
  */
 async function rewriteModelInBody(req: Request, model: string): Promise<Request> {
-  const json = (await req.clone().json()) as Record<string, unknown>;
-  json.model = model;
   const headers = new Headers(req.headers);
   headers.delete('content-length');
+  const ct = req.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
+
+  if (ct === 'multipart/form-data') {
+    // Rebuilding the form regenerates the boundary, so the stale
+    // content-type (which pins the old boundary) has to go too.
+    const form = await req.clone().formData();
+    if (form.has('model')) form.set('model', model);
+    headers.delete('content-type');
+    return new Request(req.url, { method: req.method, headers, body: form });
+  }
+
+  const json = (await req.clone().json()) as Record<string, unknown>;
+  json.model = model;
   return new Request(req.url, {
     method: req.method,
     headers,
@@ -393,7 +404,7 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   let forwardRequest = c.req.raw;
   if (strippedModel) {
     const ct = c.req.header('content-type')?.split(';')[0]?.trim() ?? '';
-    if (ct === 'application/json') {
+    if (ct === 'application/json' || ct === 'multipart/form-data') {
       forwardRequest = await rewriteModelInBody(forwardRequest, strippedModel);
     }
   }

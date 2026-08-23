@@ -68,19 +68,22 @@ export async function getJson<T>(
     signal: AbortSignal.timeout(QUOTA_TIMEOUT_MS),
   });
   const text = await res.text();
-  if (!res.ok) {
-    // A vendor edge that blocks the request outright (bot detection, a WAF
-    // challenge) answers with a styled HTML page, not their API's error
-    // shape. Dumping that markup into the dashboard is noise; naming what it
-    // is tells the operator this isn't a token or scope problem to fix here.
-    if (/^\s*<(!doctype|html)/i.test(text)) {
-      throw new Error(
-        `Usage lookup blocked (${res.status}): the vendor returned an HTML page instead of an API response, which usually means automated-traffic detection on their edge rather than an error with this seat's credentials.`,
-      );
-    }
+  // A vendor edge that blocks the request outright (bot detection, a WAF
+  // challenge) answers with a styled HTML page, not their API's error shape —
+  // and not always with an error status, so classify it from Content-Type
+  // with a body-prefix fallback (allowing whitespace/comments before the
+  // doctype) before any JSON parsing or status handling. Dumping that markup
+  // into the dashboard is noise; naming what it is tells the operator this
+  // isn't a token or scope problem to fix here.
+  const htmlContentType = /text\/html/i.test(res.headers.get('content-type') ?? '');
+  if (htmlContentType || /^\s*(?:<!--[\s\S]*?-->\s*)*<(!doctype|html)/i.test(text)) {
+    const status = res.ok ? '' : ` (${res.status})`;
     throw new Error(
-      `Usage lookup failed (${res.status}): ${text.slice(0, 200)}`,
+      `Usage lookup blocked${status}: the vendor returned an HTML page instead of an API response, which usually means automated-traffic detection on their edge rather than an error with this seat's credentials.`
     );
+  }
+  if (!res.ok) {
+    throw new Error(`Usage lookup failed (${res.status}): ${text.slice(0, 200)}`);
   }
   try {
     return JSON.parse(text) as T;

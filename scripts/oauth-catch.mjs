@@ -52,7 +52,22 @@ if (!target || !gatewayArg) {
   process.exit(1);
 }
 
-const gateway = gatewayArg.replace(/\/+$/, '');
+let gatewayUrl;
+try {
+  gatewayUrl = new URL(gatewayArg);
+} catch {
+  console.error(`Invalid gateway URL: "${gatewayArg}"`);
+  process.exit(1);
+}
+if (gatewayUrl.protocol !== 'http:' && gatewayUrl.protocol !== 'https:') {
+  console.error(
+    `Gateway URL must use http or https (got "${gatewayUrl.protocol}"). ` +
+      'Did you forget the "//"? Example: node scripts/oauth-catch.mjs claude http://localhost:8799'
+  );
+  process.exit(1);
+}
+
+const gateway = gatewayUrl.toString().replace(/\/+$/, '/');
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://localhost:${target.port}`);
