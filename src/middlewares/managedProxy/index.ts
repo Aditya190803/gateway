@@ -444,10 +444,23 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
    * cannot serve, because the clone would compete for the same source.
    */
   let meteredStream: ReadableStream<Uint8Array> | null = null;
+  /** Parsed usage JSON, read from a tee'd copy of a non-stream success body. */
+  let meteredJson: Promise<Record<string, unknown> | null> | null = null;
   if (ok && res?.body && contentType.includes('text/event-stream')) {
     const [toClient, toMeter] = res.body.tee();
     c.res = new Response(toClient, res);
     meteredStream = toMeter;
+  } else if (ok && res?.body && contentType.includes('application/json')) {
+    // A success body is the raw upstream stream, consumed by the socket as
+    // it is delivered — reading it again afterwards (`res.clone()`) throws
+    // and would silently drop the log. Tee before the response leaves, like
+    // the stream case above.
+    const [toClient, toMeter] = res.body.tee();
+    c.res = new Response(toClient, res);
+    meteredJson = new Response(toMeter)
+      .json()
+      .then((json) => json as Record<string, unknown>)
+      .catch(() => null);
   }
 
   const recordAfterResponse = async () => {
@@ -467,10 +480,12 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
         // Resolves when the upstream stream ends, which is after the client has
         // its answer. waitUntil keeps the isolate alive for exactly this.
         usage = await collectStreamUsage(meteredStream);
-      } else if (ok && ct.includes('application/json')) {
-        const json = (await res.clone().json()) as Record<string, unknown>;
-        const u = extractUsageFromJson(json);
-        usage = { prompt: u.prompt, completion: u.completion };
+      } else if (meteredJson) {
+        const json = await meteredJson;
+        if (json) {
+          const u = extractUsageFromJson(json);
+          usage = { prompt: u.prompt, completion: u.completion };
+        }
       } else if (!ok) {
         // Error bodies are small and are the whole point of logging a failure.
         errorMessage = extractErrorMessage(await res.clone().text(), ct);
