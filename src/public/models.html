@@ -405,7 +405,12 @@
         });
         var body = await res.json().catch(function () { return {}; });
         if (!res.ok) {
-          setStatus('err', (body.error && body.error.message) || ('HTTP ' + res.status));
+          setStatus(
+            'err',
+            (body.error && body.error.message) ||
+              body.message ||
+              ('HTTP ' + res.status)
+          );
           return;
         }
         MODELS = body.data || [];

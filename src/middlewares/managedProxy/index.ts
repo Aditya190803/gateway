@@ -159,7 +159,21 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
   }
 
   if (!isManagedUserApiKey(rawKey)) {
-    return next();
+    // A bearer token arrived with no legacy x-portkey routing headers (those
+    // short-circuit above), so it was meant to be a managed key. Say that
+    // plainly rather than letting the request fall through to the legacy
+    // validator's misleading "x-portkey-config or x-portkey-provider header
+    // is required" 400.
+    return c.json(
+      {
+        error: {
+          message:
+            "Invalid API key. Keys issued by this gateway start with sk- and are created from the dashboard; check for truncation or extra characters.",
+          type: 'invalid_request_error',
+        },
+      },
+      401
+    );
   }
 
   const keyHash = await hashApiKey(rawKey);
