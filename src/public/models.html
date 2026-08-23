@@ -249,7 +249,7 @@
     }
 
     function healthLine(m) {
-      return m.seats.map(function (s) {
+      return (m.seats || []).map(function (s) {
         return '<span class="seat-row">' +
           '<span class="dot ' + (s.healthy ? 'dot--ok' : 'dot--down') + '">●</span>' +
           esc(s.id) + (s.healthy ? '' : ' (cooling down)') + '</span>';
@@ -269,8 +269,9 @@
     }
 
     function renderCard(m) {
-      var rec = m.routing.alias || m.routing.bare ||
-        (m.routing.explicit && m.routing.explicit[0]) || m.id;
+      var routing = m.routing || {};
+      var rec = routing.alias || routing.bare ||
+        (routing.explicit && routing.explicit[0]) || m.id;
       var html =
         '<div class="model-card" data-model="' + esc(m.id.toLowerCase()) + '">' +
           '<div style="display:flex;justify-content:space-between;gap:var(--s-2);align-items:flex-start">' +
@@ -285,7 +286,7 @@
             actionButton('Copy "' + rec + '"', rec, true) +
             actionButton('Copy curl', '__CURL__', false) +
           '</div>' +
-          '<details' + ((m.routing.explicit && m.routing.explicit.length > 1) ? '' : ' hidden') + '>' +
+          '<details' + ((routing.explicit && routing.explicit.length > 1) ? '' : ' hidden') + '>' +
             '<summary style="cursor:pointer;color:var(--text-3);font-size:var(--t--2)">Pin a specific seat</summary>' +
             '<div class="stack stack--tight" style="padding-top:var(--s-2)">' +
               (m.routing.explicit || []).map(function (t) {
@@ -303,7 +304,7 @@
       card.querySelectorAll('[data-copy]').forEach(function (btn) {
         var value = btn.getAttribute('data-copy');
         btn.onclick = function () {
-          copyText(value === '__CURL__' ? curlFor(m.routing) : value, btn,
+          copyText(value === '__CURL__' ? curlFor(routing) : value, btn,
             value === '__CURL__' ? 'Copy curl' : 'Copy');
         };
       });
@@ -356,8 +357,9 @@
     }
 
     function renderVendorChips(all) {
+      var models = all || [];
       var counts = new Map();
-      all.forEach(function (m) {
+      models.forEach(function (m) {
         var g = vendorLabel(m.vendor);
         counts.set(g, (counts.get(g) || 0) + 1);
       });
@@ -416,7 +418,7 @@
         VENDOR = '';
         QUERY = '';
         $('m-search').value = '';
-        renderVendorChips();
+        renderVendorChips(MODELS);
         render();
       } catch (e) {
         setStatus('err', String(e && e.message ? e.message : e));
