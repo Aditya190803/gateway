@@ -9,6 +9,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <!--THEME-->
+  <style>
+    /* Page-local: language tabs for the copy-paste snippet. */
+    .snippet-tab { cursor: pointer; padding: 0.25rem 0.6rem; background: var(--surface); }
+    .snippet-tab:hover { border-color: var(--accent-line); color: var(--text); }
+    .snippet-tab--active {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .copy-btn[data-copied='true'] { color: var(--accent); }
+  </style>
 </head>
 <body>
   <main class="content" style="padding-top:0">
@@ -27,6 +39,7 @@
           <p>How to call this gateway: get a key, pick a model, send a request. Everything below works against this deployment.</p>
         </div>
         <div class="bar__actions">
+          <a class="btn btn--secondary btn--sm" href="/models">Models</a>
           <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
           <a class="btn btn--secondary btn--sm" href="/quota">Quota</a>
           <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch theme">
@@ -139,7 +152,11 @@
               <div class="cols cols--2">
                 <div class="field">
                   <label for="t-model">Model</label>
-                  <input id="t-model" type="text" placeholder="claude-sonnet-5 or anti/gemini-3-pro" />
+                  <input id="t-model" type="text" list="t-model-list" placeholder="claude-sonnet-5 or anti/gemini-3-pro" />
+                  <datalist id="t-model-list"></datalist>
+                </div>
+                <div class="field" style="align-self:end">
+                  <button type="button" class="btn btn--secondary btn--sm" id="t-load-models">Suggest models from my key</button>
                 </div>
                 <div class="field" id="t-max-tokens-field" hidden>
                   <label for="t-max-tokens">Max tokens</label>
@@ -149,6 +166,17 @@
               <div class="field" id="t-prompt-field">
                 <label for="t-prompt">Message</label>
                 <textarea id="t-prompt" rows="3">Say hi in five words.</textarea>
+              </div>
+              <div class="field">
+                <label>Copy-paste snippet <span class="label" style="display:inline;font-weight:400">— tracks the endpoint and model above</span></label>
+                <div class="row" style="gap:var(--s-2);margin-bottom:var(--s-2)">
+                  <button type="button" class="chip snippet-tab" data-lang="curl">curl</button>
+                  <button type="button" class="chip snippet-tab" data-lang="python">Python</button>
+                  <button type="button" class="chip snippet-tab" data-lang="js">JS</button>
+                  <span class="spacer"></span>
+                  <button type="button" class="btn btn--secondary btn--sm copy-btn" id="t-snippet-copy">Copy</button>
+                </div>
+                <pre class="well mono" id="t-snippet"></pre>
               </div>
               <div class="row">
                 <button type="button" class="btn btn--accent" id="t-send"><span class="btn__spin"></span>Send</button>
@@ -214,6 +242,120 @@
       var input = $('t-key');
       input.type = input.type === 'password' ? 'text' : 'password';
     };
+
+    // ------------------------------------------- model suggestions + snippets
+
+    var SNIPPET_LANG = 'curl';
+
+    function snippetModel() {
+      return $('t-model').value.trim() || 'claude-sonnet-5';
+    }
+
+    function buildSnippet() {
+      var kind = $('t-endpoint').value;
+      var ep = ENDPOINTS[kind];
+      var model = snippetModel();
+      var url = base + ep.path;
+      var bodyJson;
+      if (kind !== 'models') {
+        var prompt = $('t-prompt').value || 'Say hi in five words.';
+        bodyJson = JSON.stringify(buildBodyWith(kind, model, prompt));
+      }
+      if (SNIPPET_LANG === 'curl') {
+        if (kind === 'models') return 'curl ' + url + ' \\\n  -H "authorization: Bearer sk-<your key>"';
+        return 'curl ' + url + ' \\\n  -H "authorization: Bearer sk-<your key>" \\\n  -H "content-type: application/json" \\\n  -d \'' + bodyJson + '\'';
+      }
+      if (SNIPPET_LANG === 'python') {
+        if (kind === 'models') {
+          return '# pip install openai\n' +
+            'from openai import OpenAI\n\n' +
+            'client = OpenAI(base_url="' + base + '/v1", api_key="sk-<your key>")\n' +
+            'print(client.models.list().data)';
+        }
+        return '# pip install openai\n' +
+          'from openai import OpenAI\n\n' +
+          'client = OpenAI(base_url="' + base + '/v1", api_key="sk-<your key>")\n\n' +
+          'resp = client.chat.completions.create(\n' +
+          '    model="' + model + '",\n' +
+          '    messages=[{"role": "user", "content": ' + JSON.stringify($('t-prompt').value) + '}],\n' +
+          ')\nprint(resp.choices[0].message.content)';
+      }
+      // js
+      if (kind === 'models') {
+        return 'const res = await fetch("' + url + '", {\n' +
+          '  headers: { authorization: "Bearer sk-<your key>" },\n});\nconsole.log(await res.json());';
+      }
+      return 'const res = await fetch("' + url + '", {\n' +
+        '  method: "POST",\n' +
+        '  headers: {\n' +
+        '    authorization: "Bearer sk-<your key>",\n' +
+        '    "content-type": "application/json",\n' +
+        '  },\n' +
+        '  body: JSON.stringify(' + bodyJson + '),\n});\nconst data = await res.json();\nconsole.log(data.choices[0].message.content);';
+    }
+
+    /** buildBody against an explicit model (the input may be empty). */
+    function buildBodyWith(kind, model, prompt) {
+      if (kind === 'responses') return { model: model, input: prompt };
+      if (kind === 'messages') {
+        var maxTokens = Number($('t-max-tokens').value) || 256;
+        return { model: model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] };
+      }
+      return { model: model, messages: [{ role: 'user', content: prompt }] };
+    }
+
+    function renderSnippet() {
+      $('t-snippet').textContent = buildSnippet();
+      document.querySelectorAll('.snippet-tab').forEach(function (tab) {
+        tab.classList.toggle('snippet-tab--active', tab.getAttribute('data-lang') === SNIPPET_LANG);
+      });
+    }
+
+    document.querySelectorAll('.snippet-tab').forEach(function (tab) {
+      tab.onclick = function () { SNIPPET_LANG = tab.getAttribute('data-lang'); renderSnippet(); };
+    });
+    $('t-snippet-copy').onclick = function () {
+      var btn = this;
+      function done() {
+        btn.dataset.copied = 'true';
+        btn.textContent = 'Copied ✓';
+        setTimeout(function () { btn.dataset.copied = 'false'; btn.textContent = 'Copy'; }, 1200);
+      }
+      var text = $('t-snippet').textContent;
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else { done(); }
+    };
+
+    ['t-endpoint', 't-model', 't-prompt', 't-max-tokens'].forEach(function (id) {
+      $(id).addEventListener('input', renderSnippet);
+      $(id).addEventListener('change', renderSnippet);
+    });
+
+    async function loadModelSuggestions() {
+      var key = $('t-key').value.trim();
+      var btn = $('t-load-models');
+      if (!key) { $('t-model').placeholder = 'Enter your key first, then click again'; return; }
+      btn.dataset.busy = 'true';
+      try {
+        var res = await fetch(base + '/v1/models?verbose=1', { headers: { authorization: 'Bearer ' + key } });
+        var body = await res.json().catch(function () { return {}; });
+        var list = (body.data || []).map(function (m) {
+          // Suggest the recommended form first: alias keeps failover.
+          return (m.routing && (m.routing.alias || m.routing.bare)) || m.id;
+        });
+        $('t-model-list').innerHTML = list.map(function (v) {
+          return '<option value="' + String(v).replace(/"/g, '&quot;') + '"></option>';
+        }).join('');
+        btn.textContent = list.length ? list.length + ' available ↓' : 'No models found';
+      } catch (e) {
+        btn.textContent = 'Could not load models';
+      } finally {
+        btn.dataset.busy = 'false';
+        setTimeout(function () { btn.textContent = 'Suggest models from my key'; }, 2500);
+      }
+    }
+    $('t-load-models').onclick = loadModelSuggestions;
 
     var ENDPOINTS = {
       chat: { path: '/v1/chat/completions', method: 'POST' },
@@ -308,6 +450,7 @@
     }
 
     $('t-send').onclick = send;
+    renderSnippet();
   })();
   </script>
 </body>

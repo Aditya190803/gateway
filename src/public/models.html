@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Models</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!--THEME-->
+  <style>
+    /* Page-local: catalog cards and copy affordances, on top of theme tokens. */
+    .catalog {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: var(--s-3);
+    }
+    .model-card {
+      display: flex;
+      flex-direction: column;
+      gap: var(--s-2);
+      border: 1px solid var(--line);
+      border-radius: var(--r-3);
+      background: var(--surface);
+      padding: var(--s-3);
+    }
+    .model-card__name {
+      font-family: var(--mono);
+      font-size: var(--t-0);
+      font-weight: 500;
+      word-break: break-all;
+    }
+    .model-card__meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--s-2) var(--s-3);
+      color: var(--text-3);
+      font-size: var(--t--2);
+    }
+    .model-card__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--s-2);
+      margin-top: auto;
+    }
+    .copy-btn { position: relative; }
+    .copy-btn[data-copied='true'] { color: var(--accent); }
+    .seat-row {
+      display: flex;
+      align-items: center;
+      gap: var(--s-2);
+      font-family: var(--mono);
+      font-size: var(--t--2);
+      color: var(--text-2);
+    }
+    .seat-row .dot--ok { color: var(--ok); }
+    .seat-row .dot--down { color: var(--danger); }
+    :root { --ok: #2e9e6b; --danger: #d4574e; }
+    [data-theme='dark'] { --ok: #4cc38a; --danger: #ef6f66; }
+    /* Vendor filter chips are real buttons here; theme.css's .chip is a
+       passive tag, so give them affordance and an active state. */
+    .chips .chip {
+      cursor: pointer;
+      background: var(--surface);
+      padding: 0.25rem 0.6rem;
+      font-family: var(--sans);
+    }
+    .chips .chip:hover { border-color: var(--accent-line); color: var(--text); }
+    .chips .chip--active {
+      border-color: var(--accent-line);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <main class="content" style="padding-top:0">
+    <div class="content__inner">
+      <header class="bar">
+        <div class="bar__title">
+          <div class="brand" style="margin-bottom:var(--s-4)">
+            <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+              <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+            <span class="brand__name">Gateway<span class="brand__sub">Model catalog</span></span>
+          </div>
+          <h1>Models</h1>
+          <p>Everything your key can reach, with the exact string to paste into your client. Click once, paste, done.</p>
+        </div>
+        <div class="bar__actions">
+          <a class="btn btn--secondary btn--sm" href="/docs">Docs</a>
+          <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
+          <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="view stack">
+
+        <!-- ------------------------------------------------------- how to name -->
+        <div class="section">
+          <div class="section__head">
+            <h2>Three ways to name a model</h2>
+            <p>The catalog shows all of them per model; pick based on what you want when a seat fails.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Form</th><th>Example</th><th>Behaviour</th></tr></thead>
+              <tbody>
+                <tr><td><strong>Alias</strong> <span class="badge badge--accent">recommended</span></td><td><code class="mono">anti/gemini-2.5-flash</code></td><td>Spreads across every seat for that vendor — weighting, failover, survives seats being added or removed.</td></tr>
+                <tr><td><strong>Bare name</strong></td><td><code class="mono">gemini-2.5-flash</code></td><td>Prefix-matched against everything you can reach; weighted split if more than one provider claims it.</td></tr>
+                <tr><td><strong>Pinned seat</strong></td><td><code class="mono">4a7f/gemini-2.5-flash</code></td><td>Pins one provider row — no failover. For testing a specific seat or forcing an exact credential.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- -------------------------------------------------------------- key -->
+        <div class="section">
+          <div class="section__head">
+            <h2>Your key</h2>
+            <p>The list is per-key: subscription seats are visible only to keys from the account that connected them.</p>
+          </div>
+          <div class="panel"><div class="panel__body stack stack--tight">
+            <div class="cols cols--2">
+              <div class="field">
+                <label for="m-key">API key</label>
+                <div class="secret">
+                  <input id="m-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" />
+                  <button type="button" class="secret__toggle" id="m-key-toggle" aria-label="Show key">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div class="field" style="align-self:end">
+                <button type="button" class="btn btn--accent" id="m-load"><span class="btn__spin"></span>Load models</button>
+              </div>
+            </div>
+            <p class="muted">The key stays in this browser tab — it is sent only to this gateway and never stored.</p>
+            <span class="badge" id="m-status" hidden></span>
+          </div></div>
+        </div>
+
+        <!-- ---------------------------------------------------------- catalog -->
+        <div class="section">
+          <div class="section__head">
+            <h2>Catalog</h2>
+            <span class="count" id="m-count" hidden></span>
+          </div>
+          <div class="field field--inline" style="margin-bottom:var(--s-3)">
+            <input id="m-search" type="search" placeholder="Filter by name…" disabled />
+          </div>
+          <div class="chips" id="m-vendors" hidden></div>
+          <div class="stack stack--tight" id="m-catalog" style="margin-top:var(--s-3)">
+            <div class="empty">
+              <p>Paste a key above and load the catalog. Every card gives you one-click copies of the exact model string and a ready-to-run curl command.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var savedTheme = null;
+    try { savedTheme = localStorage.getItem('gw-theme'); } catch (e) { /* private mode */ }
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    function applyTheme(mode) { document.documentElement.dataset.theme = mode === 'dark' ? 'dark' : 'light'; }
+    applyTheme(savedTheme || (darkQuery.matches ? 'dark' : 'light'));
+    darkQuery.addEventListener('change', function (e) { if (!savedTheme) applyTheme(e.matches ? 'dark' : 'light'); });
+    document.getElementById('theme-toggle').onclick = function () {
+      savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('gw-theme', savedTheme); } catch (e) { /* ignore */ }
+      applyTheme(savedTheme);
+    };
+
+    window.addEventListener('scroll', function () {
+      document.querySelector('.bar').dataset.stuck = window.scrollY > 12 ? 'true' : 'false';
+    }, { passive: true });
+
+    var $ = function (id) { return document.getElementById(id); };
+    var base = location.origin;
+
+    // ------------------------------------------------------------ copying
+
+    function copyText(text, btn, label) {
+      function done() {
+        if (!btn) return;
+        var prev = btn.textContent;
+        btn.dataset.copied = 'true';
+        btn.textContent = 'Copied ✓';
+        setTimeout(function () {
+          btn.dataset.copied = 'false';
+          btn.textContent = prev.indexOf('✓') === -1 ? prev : label;
+        }, 1200);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text); done(); });
+      } else {
+        fallbackCopy(text); done();
+      }
+    }
+
+    // execCommand path for non-secure origins where the async clipboard
+    // API is unavailable (the Worker serves plain http on LANs).
+    function fallbackCopy(text) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch (e) { /* best effort */ }
+      document.body.removeChild(ta);
+    }
+
+    // ------------------------------------------------------------- state
+
+    var MODELS = [];   // verbose entries
+    var VENDOR = '';   // active vendor filter ('' = all)
+    var QUERY = '';
+
+    function vendorLabel(v) {
+      if (!v) return 'Other';
+      return v.replace(/^(google|anthropic|openai|xai|moonshot)-/, '').replace(/-/g, ' ');
+    }
+
+    function esc(s) {
+      return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+      });
+    }
+
+    function statLine(m) {
+      if (!m.stats || !m.stats.requests) return '';
+      var parts = [m.stats.requests + ' req · 24h'];
+      if (m.stats.avg_ms != null) parts.push('~' + m.stats.avg_ms + 'ms avg');
+      return '<span>' + esc(parts.join(' · ')) + '</span>';
+    }
+
+    function healthLine(m) {
+      return m.seats.map(function (s) {
+        return '<span class="seat-row">' +
+          '<span class="dot ' + (s.healthy ? 'dot--ok' : 'dot--down') + '">●</span>' +
+          esc(s.id) + (s.healthy ? '' : ' (cooling down)') + '</span>';
+      }).join('');
+    }
+
+    function curlFor(routing) {
+      var model = routing.alias || routing.bare || (routing.explicit[0] ?? '');
+      return "curl " + base + "/v1/chat/completions \\\n" +
+        '  -H "authorization: Bearer sk-<your key>" \\\n' +
+        '  -H "content-type: application/json" \\\n' +
+        "  -d '{\"model\":\"" + model + "\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}'";
+    }
+
+    function actionButton(label, value, primary) {
+      return '<button type="button" class="btn copy-btn ' + (primary ? 'btn--accent' : 'btn--secondary') + ' btn--sm" data-copy="' + esc(value) + '">' + esc(label) + '</button>';
+    }
+
+    function renderCard(m) {
+      var rec = m.routing.alias || m.routing.bare ||
+        (m.routing.explicit && m.routing.explicit[0]) || m.id;
+      var html =
+        '<div class="model-card" data-model="' + esc(m.id.toLowerCase()) + '">' +
+          '<div style="display:flex;justify-content:space-between;gap:var(--s-2);align-items:flex-start">' +
+            '<span class="model-card__name">' + esc(m.id) + '</span>' +
+            (m.routing.alias ? '<span class="badge badge--accent">alias</span>' : '') +
+          '</div>' +
+          '<div class="model-card__meta">' +
+            statLine(m) +
+            (healthLine(m)) +
+          '</div>' +
+          '<div class="model-card__actions">' +
+            actionButton('Copy "' + rec + '"', rec, true) +
+            actionButton('Copy curl', '__CURL__', false) +
+          '</div>' +
+          '<details' + ((m.routing.explicit && m.routing.explicit.length > 1) ? '' : ' hidden') + '>' +
+            '<summary style="cursor:pointer;color:var(--text-3);font-size:var(--t--2)">Pin a specific seat</summary>' +
+            '<div class="stack stack--tight" style="padding-top:var(--s-2)">' +
+              (m.routing.explicit || []).map(function (t) {
+                return '<div class="seat-row"><code>' + esc(t) + '</code>' +
+                  '<button type="button" class="btn btn--secondary btn--sm copy-btn" data-copy="' + esc(t) + '">Copy</button></div>';
+              }).join('') +
+            '</div>' +
+          '</details>' +
+        '</div>';
+
+      var wrap = document.createElement('div');
+      wrap.innerHTML = html;
+      var card = wrap.firstElementChild;
+
+      card.querySelectorAll('[data-copy]').forEach(function (btn) {
+        var value = btn.getAttribute('data-copy');
+        btn.onclick = function () {
+          copyText(value === '__CURL__' ? curlFor(m.routing) : value, btn,
+            value === '__CURL__' ? 'Copy curl' : 'Copy');
+        };
+      });
+      return card;
+    }
+
+    function render() {
+      var catalogEl = $('m-catalog');
+      catalogEl.innerHTML = '';
+      var q = QUERY.trim().toLowerCase();
+
+      var filtered = MODELS.filter(function (m) {
+        if (VENDOR && vendorLabel(m.vendor) !== VENDOR) return false;
+        if (!q) return true;
+        var haystack = [
+          m.id, m.vendor, m.owned_by,
+          m.routing.alias, m.routing.bare,
+        ].concat(m.routing.explicit || []).join(' ').toLowerCase();
+        return haystack.indexOf(q) !== -1;
+      });
+
+      $('m-count').hidden = false;
+      $('m-count').textContent = filtered.length + ' model' + (filtered.length === 1 ? '' : 's');
+
+      if (!filtered.length) {
+        catalogEl.innerHTML =
+          '<div class="empty"><p>No models match' + (q ? ' “' + esc(QUERY) + '”' : '') +
+          '. Clear the filter or load with a different key.</p></div>';
+        return;
+      }
+
+      // Group by vendor so same-vendor seats sit together, OpenRouter-style.
+      var groups = new Map();
+      filtered.forEach(function (m) {
+        var g = vendorLabel(m.vendor);
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g).push(m);
+      });
+      [...groups.entries()].forEach(function (entry) {
+        var g = entry[0], items = entry[1];
+        var head = document.createElement('h3');
+        head.textContent = g.charAt(0).toUpperCase() + g.slice(1);
+        head.style.margin = 'var(--s-2) 0 0';
+        catalogEl.appendChild(head);
+        var grid = document.createElement('div');
+        grid.className = 'catalog';
+        items.forEach(function (m) { grid.appendChild(renderCard(m)); });
+        catalogEl.appendChild(grid);
+      });
+    }
+
+    function renderVendorChips(all) {
+      var counts = new Map();
+      all.forEach(function (m) {
+        var g = vendorLabel(m.vendor);
+        counts.set(g, (counts.get(g) || 0) + 1);
+      });
+      var el = $('m-vendors');
+      el.hidden = false;
+      el.innerHTML = '';
+
+      function chip(label, value, count) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip' + (VENDOR === value ? ' chip--active' : '');
+        b.textContent = label + ' (' + count + ')';
+        b.onclick = function () { VENDOR = value; renderChips(); render(); };
+        el.appendChild(b);
+      }
+      function renderChips() {
+        el.innerHTML = '';
+        chip('All', '', MODELS.length);
+        [...counts.entries()].forEach(function (e) { chip(e[0], e[0], e[1]); });
+      }
+      renderChips();
+    }
+
+    // -------------------------------------------------------------- load
+
+    function setStatus(kind, text) {
+      var el = $('m-status');
+      el.hidden = !kind;
+      el.textContent = text || '';
+      el.className = 'badge ' + (kind === 'ok' ? 'badge--ok' : kind === 'err' ? 'badge--danger' : '');
+    }
+
+    async function load() {
+      var key = $('m-key').value.trim();
+      if (!key) { setStatus('err', 'Enter an API key first.'); return; }
+
+      var btn = $('m-load');
+      btn.dataset.busy = 'true';
+      setStatus('', '');
+      try {
+        var res = await fetch(base + '/v1/models?verbose=1', {
+          headers: { authorization: 'Bearer ' + key },
+        });
+        var body = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          setStatus('err', (body.error && body.error.message) || ('HTTP ' + res.status));
+          return;
+        }
+        MODELS = body.data || [];
+        if (!MODELS.length) {
+          setStatus('err', 'No providers configured for this key.');
+          return;
+        }
+        setStatus('ok', MODELS.length + ' models loaded');
+        $('m-search').disabled = false;
+        VENDOR = '';
+        QUERY = '';
+        $('m-search').value = '';
+        renderVendorChips();
+        render();
+      } catch (e) {
+        setStatus('err', String(e && e.message ? e.message : e));
+      } finally {
+        btn.dataset.busy = 'false';
+      }
+    }
+
+    $('m-load').onclick = load;
+    $('m-key').addEventListener('keydown', function (e) { if (e.key === 'Enter') load(); });
+    $('m-key-toggle').onclick = function () {
+      var input = $('m-key');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+    $('m-search').addEventListener('input', function (e) {
+      QUERY = e.target.value;
+      render();
+    });
+
+    // Re-run with the stored key on load? No — the key is deliberately kept
+    // out of localStorage, same policy as the docs console.
+  })();
+  </script>
+</body>
+</html>
