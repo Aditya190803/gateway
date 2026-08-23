@@ -200,6 +200,47 @@ export async function aggregateModelsFromProviders(
 }
 
 /**
+ * Same walk as {@link aggregateModelsFromProviders}, but keeps attribution:
+ * every model carries the ids of all servable providers claiming it, which is
+ * what a model catalog needs to show `provider_id/model` routing targets.
+ * The first claimant's `owned_by` wins, matching the flat listing.
+ */
+export async function aggregateModelsVerbose(
+  env: ManagedEnv,
+  providerIds: string[]
+): Promise<{
+  object: string;
+  data: {
+    id: string;
+    object: string;
+    owned_by: string;
+    provider_ids: string[];
+  }[];
+}> {
+  const byId = new Map<
+    string,
+    { id: string; object: string; owned_by: string; provider_ids: string[] }
+  >();
+  for (const id of providerIds) {
+    const models = await modelsForProvider(env, id);
+    for (const m of models) {
+      const existing = byId.get(m.id);
+      if (existing) {
+        existing.provider_ids.push(id);
+      } else {
+        byId.set(m.id, {
+          id: m.id,
+          object: m.object,
+          owned_by: m.owned_by,
+          provider_ids: [id],
+        });
+      }
+    }
+  }
+  return { object: 'list', data: [...byId.values()] };
+}
+
+/**
  * Subscription endpoints generally do not expose a /models listing, and probing
  * one with a subscription token is a wasted round trip. For OAuth providers the
  * model list configured on the provider row is authoritative; API-key providers

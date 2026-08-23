@@ -143,6 +143,24 @@ export const VENDOR_ALIASES: Record<string, string> = {
 
 export type AliasTarget = { alias: string; vendor: string; model: string };
 
+/**
+ * The inverse lookup: which short alias to recommend for a vendor.
+ *
+ * Several aliases can name the same vendor (`anti` and `antigravity`); the
+ * first one declared wins, so the recommended form stays stable regardless of
+ * object key order.
+ */
+const ALIAS_BY_VENDOR: Record<string, string> = {};
+for (const [alias, vendor] of Object.entries(VENDOR_ALIASES)) {
+  if (!(vendor in ALIAS_BY_VENDOR)) ALIAS_BY_VENDOR[vendor] = alias;
+}
+
+/** The canonical alias for a vendor, or null when the vendor has none. */
+export function aliasForVendor(vendor: string | null | undefined): string | null {
+  if (!vendor) return null;
+  return ALIAS_BY_VENDOR[vendor] ?? null;
+}
+
 export function parseVendorAlias(model: string): AliasTarget | null {
   const idx = model.indexOf('/');
   if (idx <= 0) return null;

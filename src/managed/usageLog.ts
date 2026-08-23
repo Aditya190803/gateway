@@ -44,6 +44,42 @@ export async function logUsage(
     .run();
 }
 
+export type ModelUsageStat = { requests: number; avg_ms: number | null };
+
+/**
+ * Per-model request count and average latency over the last 24h.
+ *
+ * `usage_logs.model` stores the string the client sent — `anti/gemini-2.5-flash`
+ * and `google/gemini-2.5-flash` are the same model through two doors, so the
+ * routing prefix is stripped here before grouping. Duration is averaged rather
+ * than medianed: SQLite has no percentile without loading every row, and an
+ * honest "avg latency" beats a fake p50.
+ */
+export async function modelUsageStatsLast24h(
+  db: D1Database
+): Promise<Map<string, ModelUsageStat>> {
+  const rows = await db
+    .prepare(
+      `SELECT CASE WHEN instr(model, '/') > 0
+                   THEN substr(model, instr(model, '/') + 1)
+                   ELSE model END AS base_model,
+              COUNT(*) AS requests,
+              AVG(duration_ms) AS avg_ms
+         FROM usage_logs
+        WHERE created_at >= datetime('now', '-1 day')
+        GROUP BY base_model`
+    )
+    .all<{ base_model: string; requests: number; avg_ms: number | null }>();
+  const stats = new Map<string, ModelUsageStat>();
+  for (const r of rows.results ?? []) {
+    stats.set(r.base_model, {
+      requests: r.requests,
+      avg_ms: r.avg_ms === null ? null : Math.round(r.avg_ms),
+    });
+  }
+  return stats;
+}
+
 /** Counts toward RPM even when token usage is unknown (e.g. audio, images). */
 export async function logRequest(
   db: D1Database,

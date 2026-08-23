@@ -24,6 +24,7 @@ import adminDashboardHtml from './public/admin-dashboard.html';
 import quotaHtml from './public/quota.html';
 import landingHtml from './public/landing.html';
 import docsHtml from './public/docs.html';
+import modelsHtml from './public/models.html';
 import themeCss from './public/theme.css';
 
 // Handlers
@@ -71,6 +72,7 @@ const adminPage = withTheme(adminDashboardHtml);
 const quotaPage = withTheme(quotaHtml);
 const landingPage = withTheme(landingHtml);
 const docsPage = withTheme(docsHtml);
+const modelsPage = withTheme(modelsHtml);
 
 const PAGE_HEADERS = {
   'Content-Type': 'text/html; charset=utf-8',
@@ -166,6 +168,13 @@ app.get('/quota', (c) =>
  * its own; the console sends requests with a key the visitor types in.
  */
 app.get('/docs', (c) => c.html(docsPage, 200, PAGE_HEADERS));
+
+/**
+ * Copy-paste model catalog. Public page like /docs; the per-key model list
+ * comes from `GET /v1/models?verbose=1` with a key the visitor pastes in, so
+ * owner-only subscription seats stay visible only to their own account.
+ */
+app.get('/models', (c) => c.html(modelsPage, 200, PAGE_HEADERS));
 
 // Managed proxy: user API keys, routing, provider credentials (before route handlers)
 app.use('*', managedProxyMiddleware);

@@ -2,10 +2,12 @@ import { Context, Next } from 'hono';
 import { hashApiKey } from '../../managed/apiKeys';
 import {
   aggregateModelsFromProviders,
+  aggregateModelsVerbose,
   applyProviderHeaders,
   resolveProviderCredential,
 } from '../../managed/injectProvider';
 import {
+  aliasForVendor,
   matchProvidersWithDefaults,
   parseExplicitTarget,
   parseModelsJson,
@@ -32,6 +34,7 @@ import {
   extractErrorMessage,
   extractUsageFromJson,
   logRequest,
+  modelUsageStatsLast24h,
 } from '../../managed/usageLog';
 
 const MANAGED_API_KEY = 'managedApiKey';
@@ -255,9 +258,65 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
         503
       );
     }
-    const list = await aggregateModelsFromProviders(env, ids);
     c.executionCtx.waitUntil(recordRequestForRpm(env.DB, keyRow.id));
-    return c.json(list);
+
+    // OpenAI-compatible flat listing stays the default. `?verbose=1` adds the
+    // routing forms (`alias/model`, `provider_id/model`, bare) plus seat
+    // health and last-24h usage — what a copy-paste model catalog needs.
+    const verbose =
+      new URL(c.req.url).searchParams.get('verbose') === '1';
+    if (!verbose) {
+      const list = await aggregateModelsFromProviders(env, ids);
+      return c.json(list);
+    }
+
+    const verboseList = await aggregateModelsVerbose(env, ids);
+    const seatById = new Map(providerModels.map((p) => [p.id, p]));
+    let stats: Map<string, { requests: number; avg_ms: number | null }>;
+    try {
+      // Usage numbers are display sugar; a stats failure must not kill the
+      // listing any more than logging failures kill requests.
+      stats = await modelUsageStatsLast24h(env.DB);
+    } catch {
+      stats = new Map();
+    }
+    const now = Date.now();
+    const data = verboseList.data.map((m) => {
+      const seats = m.provider_ids
+        .map((id) => seatById.get(id))
+        .filter(
+          (s): s is NonNullable<typeof s> =>
+            Boolean(s) && vendorRoutable(s!.vendor)
+        );
+      const healthySeats = seats.filter(
+        (s) => s.cooldownUntil === null || s.cooldownUntil <= now
+      );
+      const vendor = seats.find((s) => s.vendor)?.vendor ?? null;
+      const alias = aliasForVendor(vendor);
+      const stat = stats.get(m.id) ?? null;
+      return {
+        id: m.id,
+        object: m.object,
+        owned_by: m.owned_by,
+        vendor,
+        routing: {
+          // The recommended form: survives seats being added or removed and
+          // keeps weighting/failover across every row for the vendor.
+          alias: alias ? `${alias}/${m.id}` : null,
+          explicit: healthySeats.map((s) => `${s.id}/${m.id}`),
+          bare: m.id,
+        },
+        seats: seats.map((s) => ({
+          id: s.id,
+          healthy: s.cooldownUntil === null || s.cooldownUntil <= now,
+        })),
+        stats:
+          stat && (stat.requests > 0 || stat.avg_ms !== null)
+            ? stat
+            : null,
+      };
+    });
+    return c.json({ object: 'list', data });
   }
 
   // A subscription backend may expose only part of the vendor's API surface.
