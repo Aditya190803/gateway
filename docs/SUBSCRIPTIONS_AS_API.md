@@ -116,6 +116,47 @@ request you make, including ones you meant to send to a metered key.
 
 `GET /v1/models` lists what your key can currently reach.
 
+**Or skip matching and name the provider directly**: `provider_id/model` routes
+straight to that row — no prefix guessing, no weighted split across seats that
+happen to share a model, no failover to a different credential. Only the
+provider id itself is stripped; the gateway sends `model` upstream unprefixed.
+It has to be a real provider id you can see, or the request 400s. Useful when
+you have two seats claiming the same model and want to pin a request (or a
+whole client) to one of them:
+
+```bash
+curl https://<gateway>/v1/chat/completions \
+  -H "authorization: Bearer sk-<your key>" \
+  -H 'content-type: application/json' \
+  -d '{"model":"4a7f/gemini-3-pro","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Provider ids are worth picking deliberately when you connect a seat — short and
+opaque (`4a7f`, not `antigravity-sub`) is a reasonable default, since it is
+what shows up in `owned_by` on `/v1/models` and in any `provider_id/model`
+address, and a name that announces "this is a subscription seat wired in as an
+API" is exactly the kind of thing worth not broadcasting.
+
+**Or name the vendor instead of a row**: a short alias —
+`codex/`, `claude/`, `grok/`, `anti/` (or `antigravity/`), `kimi/` — spreads the
+request across *every* provider row for that vendor, the same weighted,
+failing-over selection plain prefix matching would use. Unlike
+`provider_id/model`, this stays correct as seats are added or removed: connect
+a second Antigravity seat and `anti/gemini-3-flash` load-balances across both
+without you touching the model string, and it never has to say the provider's
+own id (its `-sub` suffix or whatever an operator named it) at all:
+
+```bash
+curl https://<gateway>/v1/chat/completions \
+  -H "authorization: Bearer sk-<your key>" \
+  -H 'content-type: application/json' \
+  -d '{"model":"anti/gemini-3-flash","messages":[{"role":"user","content":"hi"}]}'
+```
+
+A real provider id always wins over an alias if the two happen to collide — a
+provider actually named `codex` is addressed by `codex/model` before the alias
+table is even consulted.
+
 ## 4. Know the limits
 
 **Codex serves `/v1/responses` only.** `chatgpt.com/backend-api/codex` has no

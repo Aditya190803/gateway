@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Docs</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!--THEME-->
+</head>
+<body>
+  <main class="content" style="padding-top:0">
+    <div class="content__inner">
+      <header class="bar">
+        <div class="bar__title">
+          <div class="brand" style="margin-bottom:var(--s-4)">
+            <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+              <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+            <span class="brand__name">Gateway<span class="brand__sub">Managed proxy</span></span>
+          </div>
+          <h1>API docs</h1>
+          <p>How to call this gateway: get a key, pick a model, send a request. Everything below works against this deployment.</p>
+        </div>
+        <div class="bar__actions">
+          <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
+          <a class="btn btn--secondary btn--sm" href="/quota">Quota</a>
+          <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="view stack">
+
+        <!-- ---------------------------------------------------------- 1. key -->
+        <div class="section">
+          <div class="section__head">
+            <h2>1. Get a key</h2>
+            <p>Every request authenticates with a managed <code>sk-…</code> key, created from the dashboard.</p>
+          </div>
+          <div class="panel"><div class="panel__body stack stack--tight">
+            <p>Sign in at <a href="/admin/dashboard">/admin/dashboard</a> → <strong>API keys</strong> → <strong>Create key</strong>. The value is shown once; store it somewhere real.</p>
+            <p class="muted">A key only reaches providers and subscription seats owned by your account. Someone else's key hitting the same model gets <code>no active provider configured for model</code> rather than a ride on your seat.</p>
+          </div></div>
+        </div>
+
+        <!-- ------------------------------------------------------ 2. base url -->
+        <div class="section">
+          <div class="section__head">
+            <h2>2. Base URL &amp; auth</h2>
+            <p>OpenAI-compatible. No vendor keys on the client — the gateway holds the real credential.</p>
+          </div>
+          <div class="panel"><div class="panel__body stack stack--tight">
+            <dl class="record__detail" style="display:grid;gap:var(--s-2) var(--s-5)">
+              <div><dt>Base URL</dt><dd><code class="mono" id="base-url">…</code></dd></div>
+              <div><dt>Header</dt><dd><code class="mono">Authorization: Bearer sk-&lt;your key&gt;</code></dd></div>
+            </dl>
+            <pre class="well mono" id="curl-example">curl https://&lt;gateway&gt;/v1/chat/completions \
+  -H "authorization: Bearer sk-&lt;your key&gt;" \
+  -H "content-type: application/json" \
+  -d '{"model":"claude-sonnet-5","messages":[{"role":"user","content":"hi"}]}'</pre>
+          </div></div>
+        </div>
+
+        <!-- ------------------------------------------------------- 3. surface -->
+        <div class="section">
+          <div class="section__head">
+            <h2>3. Endpoints</h2>
+            <p>Standard OpenAI paths, plus <code>/v1/messages</code> for clients that speak Anthropic's API natively.</p>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Endpoint</th><th>Method</th><th>Notes</th></tr></thead>
+              <tbody>
+                <tr><td><code>/v1/chat/completions</code></td><td>POST</td><td>Chat, OpenAI-shaped. Works for any routed model, subscription or metered.</td></tr>
+                <tr><td><code>/v1/completions</code></td><td>POST</td><td>Legacy single-prompt completions.</td></tr>
+                <tr><td><code>/v1/messages</code></td><td>POST</td><td>Anthropic Messages API shape. Point the Anthropic SDK's <code>base_url</code> here.</td></tr>
+                <tr><td><code>/v1/responses</code></td><td>POST</td><td>OpenAI Responses API. The only path a connected Codex seat serves.</td></tr>
+                <tr><td><code>/v1/embeddings</code></td><td>POST</td><td>Embeddings.</td></tr>
+                <tr><td><code>/v1/images/generations</code>, <code>/v1/images/edits</code></td><td>POST</td><td>Image generation and edits.</td></tr>
+                <tr><td><code>/v1/audio/speech</code>, <code>/v1/audio/transcriptions</code>, <code>/v1/audio/translations</code></td><td>POST</td><td>TTS and speech-to-text.</td></tr>
+                <tr><td><code>/v1/files</code>, <code>/v1/batches</code></td><td>GET/POST</td><td>File uploads and batch jobs, where the upstream provider supports them.</td></tr>
+                <tr><td><code>/v1/models</code></td><td>GET</td><td>Lists what your key can currently reach.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- --------------------------------------------------------- 4. model -->
+        <div class="section">
+          <div class="section__head">
+            <h2>4. Pick a model</h2>
+            <p>Routing matches the <code>model</code> field as a prefix against every provider you can reach, and splits traffic by weight when more than one claims it.</p>
+          </div>
+          <div class="panel"><div class="panel__body stack stack--tight">
+            <p>Two providers can claim the same model on purpose — a subscription seat plus a metered key, or two seats. Whichever is healthy and not cooling down gets the request; a failing one is retried on another automatically.</p>
+            <p><strong>Name a provider directly</strong> with <code class="mono">provider_id/model</code> to skip all of that — no prefix guess, no weighting, no failover to a different credential:</p>
+            <pre class="well mono">{"model":"4a7f/gemini-3-pro", …}</pre>
+            <p class="muted">Only the segment before the <em>first</em> slash has to be a provider id you can see; the rest travels through unprefixed, so <code class="mono">groq/qwen/qwen3-32b</code> targets the provider row <code>groq</code> and sends Groq the model name <code>qwen/qwen3-32b</code> exactly as it expects.</p>
+            <p><strong>Or name the vendor</strong> with a short alias — <code class="mono">codex/</code>, <code class="mono">claude/</code>, <code class="mono">grok/</code>, <code class="mono">anti/</code>, <code class="mono">kimi/</code> — to spread the request across <em>every</em> row for that vendor, keeping weighting and failover intact:</p>
+            <pre class="well mono">{"model":"anti/gemini-3-flash", …}</pre>
+            <p class="muted">Connect a second seat on the same vendor and the alias keeps working across both, unchanged — unlike <code class="mono">provider_id/model</code>, which stays pinned to whichever one row you named. A real provider id always wins if it happens to collide with an alias.</p>
+          </div></div>
+        </div>
+
+        <!-- ------------------------------------------------------ 5. try it -->
+        <div class="section">
+          <div class="section__head">
+            <h2>5. Try it</h2>
+            <p>Sends a real request from this browser, straight to this gateway. The key is never stored — it's gone on reload.</p>
+          </div>
+          <div class="panel">
+            <div class="panel__body stack">
+              <div class="cols cols--2">
+                <div class="field">
+                  <label for="t-key">API key</label>
+                  <div class="secret">
+                    <input id="t-key" type="password" autocomplete="off" spellcheck="false" placeholder="sk-…" />
+                    <button type="button" class="secret__toggle" id="t-key-toggle" aria-label="Show key">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7Z" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="t-endpoint">Endpoint</label>
+                  <select id="t-endpoint">
+                    <option value="chat" selected>/v1/chat/completions</option>
+                    <option value="responses">/v1/responses</option>
+                    <option value="messages">/v1/messages</option>
+                    <option value="models">/v1/models (GET, no body)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="cols cols--2">
+                <div class="field">
+                  <label for="t-model">Model</label>
+                  <input id="t-model" type="text" placeholder="claude-sonnet-5 or anti/gemini-3-pro" />
+                </div>
+                <div class="field" id="t-max-tokens-field" hidden>
+                  <label for="t-max-tokens">Max tokens</label>
+                  <input id="t-max-tokens" type="number" min="1" value="256" />
+                </div>
+              </div>
+              <div class="field" id="t-prompt-field">
+                <label for="t-prompt">Message</label>
+                <textarea id="t-prompt" rows="3">Say hi in five words.</textarea>
+              </div>
+              <div class="row">
+                <button type="button" class="btn btn--accent" id="t-send"><span class="btn__spin"></span>Send</button>
+                <span class="muted" id="t-timing"></span>
+                <span class="spacer"></span>
+                <span class="badge" id="t-status" hidden></span>
+              </div>
+              <pre class="well mono" id="t-response" hidden></pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- --------------------------------------------------- 6. troubleshoot -->
+        <div class="section">
+          <div class="section__head">
+            <h2>6. Troubleshooting</h2>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Symptom</th><th>Cause</th></tr></thead>
+              <tbody>
+                <tr><td><code>401</code> &mdash; <em>Missing Authorization: Bearer</em></td><td>No key sent, or it's somewhere other than the <code>Authorization</code> header.</td></tr>
+                <tr><td><em>no active provider configured for model</em></td><td>Nothing you own claims that model name, or a <code>provider_id/model</code> target doesn't exist or can't serve this path.</td></tr>
+                <tr><td>Anthropic <em>only authorized for use with Claude Code</em></td><td>Vendor-side check on consumer-plan OAuth credentials used outside Claude Code. Not fixable here.</td></tr>
+                <tr><td>A seat that worked suddenly fails</td><td>The credential lapsed or was revoked. Check <code>GET /admin/oauth/providers</code>, then <code>POST /admin/oauth/&lt;id&gt;/refresh</code>.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="muted" style="margin-top:var(--s-3)">Full detail on subscriptions, OAuth, and failover: see the repo's <code>docs/SUBSCRIPTIONS_AS_API.md</code> and <code>docs/OAUTH_PROVIDERS.md</code>.</p>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <script>
+  (function () {
+    'use strict';
+
+    var savedTheme = null;
+    try { savedTheme = localStorage.getItem('gw-theme'); } catch (e) { /* private mode */ }
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    function applyTheme(mode) { document.documentElement.dataset.theme = mode === 'dark' ? 'dark' : 'light'; }
+    applyTheme(savedTheme || (darkQuery.matches ? 'dark' : 'light'));
+    darkQuery.addEventListener('change', function (e) { if (!savedTheme) applyTheme(e.matches ? 'dark' : 'light'); });
+    document.getElementById('theme-toggle').onclick = function () {
+      savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('gw-theme', savedTheme); } catch (e) { /* ignore */ }
+      applyTheme(savedTheme);
+    };
+
+    window.addEventListener('scroll', function () {
+      document.querySelector('.bar').dataset.stuck = window.scrollY > 12 ? 'true' : 'false';
+    }, { passive: true });
+
+    var $ = function (id) { return document.getElementById(id); };
+
+    var base = location.origin;
+    $('base-url').textContent = base + '/v1';
+    $('curl-example').innerHTML = $('curl-example').innerHTML.replace(/https:\/\/&lt;gateway&gt;/g, base);
+
+    $('t-key-toggle').onclick = function () {
+      var input = $('t-key');
+      input.type = input.type === 'password' ? 'text' : 'password';
+    };
+
+    var ENDPOINTS = {
+      chat: { path: '/v1/chat/completions', method: 'POST' },
+      responses: { path: '/v1/responses', method: 'POST' },
+      messages: { path: '/v1/messages', method: 'POST' },
+      models: { path: '/v1/models', method: 'GET' },
+    };
+
+    function syncFields() {
+      var kind = $('t-endpoint').value;
+      $('t-prompt-field').hidden = kind === 'models';
+      $('t-max-tokens-field').hidden = kind !== 'messages';
+      $('t-model').disabled = kind === 'models';
+    }
+    $('t-endpoint').addEventListener('change', syncFields);
+    syncFields();
+
+    function buildBody(kind) {
+      var model = $('t-model').value.trim();
+      var prompt = $('t-prompt').value;
+      if (kind === 'chat') {
+        return { model: model, messages: [{ role: 'user', content: prompt }] };
+      }
+      if (kind === 'responses') {
+        return { model: model, input: prompt };
+      }
+      if (kind === 'messages') {
+        var maxTokens = Number($('t-max-tokens').value) || 256;
+        return { model: model, max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] };
+      }
+      return null;
+    }
+
+    async function send() {
+      var btn = $('t-send');
+      var key = $('t-key').value.trim();
+      var kind = $('t-endpoint').value;
+      var ep = ENDPOINTS[kind];
+      var statusEl = $('t-status');
+      var respEl = $('t-response');
+      var timingEl = $('t-timing');
+
+      if (!key) {
+        respEl.hidden = false;
+        respEl.textContent = 'Enter an API key first.';
+        return;
+      }
+      if (kind !== 'models' && !$('t-model').value.trim()) {
+        respEl.hidden = false;
+        respEl.textContent = 'Enter a model name first.';
+        return;
+      }
+
+      btn.dataset.busy = 'true';
+      statusEl.hidden = true;
+      timingEl.textContent = '';
+      respEl.hidden = false;
+      respEl.textContent = 'Sending…';
+
+      var started = performance.now();
+      try {
+        var init = {
+          method: ep.method,
+          headers: { authorization: 'Bearer ' + key },
+        };
+        if (ep.method === 'POST') {
+          init.headers['content-type'] = 'application/json';
+          init.body = JSON.stringify(buildBody(kind));
+        }
+        var res = await fetch(base + ep.path, init);
+        var text = await res.text();
+        var elapsed = Math.round(performance.now() - started);
+        timingEl.textContent = elapsed + 'ms';
+
+        statusEl.hidden = false;
+        statusEl.textContent = res.status;
+        statusEl.className = 'badge ' + (res.ok ? 'badge--ok' : 'badge--danger');
+
+        try {
+          respEl.textContent = JSON.stringify(JSON.parse(text), null, 2);
+        } catch (e) {
+          respEl.textContent = text;
+        }
+      } catch (e) {
+        statusEl.hidden = false;
+        statusEl.textContent = 'error';
+        statusEl.className = 'badge badge--danger';
+        respEl.textContent = String(e && e.message ? e.message : e);
+      } finally {
+        btn.dataset.busy = 'false';
+      }
+    }
+
+    $('t-send').onclick = send;
+  })();
+  </script>
+</body>
+</html>

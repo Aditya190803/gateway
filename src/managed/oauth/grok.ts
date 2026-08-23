@@ -303,8 +303,12 @@ export const xaiGrokAdapter: OAuthAdapter = {
       refresh_token: tokens.refresh_token,
     });
     if (raw.error) {
+      // Keep the vendor's error code even when a description exists —
+      // `invalid_grant` is matched downstream to signal a dead refresh token.
       throw new Error(
-        `Grok token refresh failed: ${raw.error_description ?? raw.error}`,
+        `Grok token refresh failed: ${raw.error}${
+          raw.error_description ? ` (${raw.error_description})` : ''
+        }`
       );
     }
     return toTokens(raw, tokens);

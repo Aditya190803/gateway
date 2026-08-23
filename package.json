@@ -29,6 +29,7 @@
     "db:migrate:local": "wrangler d1 migrations apply ai-gateway-db --local",
     "db:migrate": "wrangler d1 migrations apply ai-gateway-db",
     "deploy": "wrangler deploy --minify src/index.ts",
+    "oauth:catch": "node scripts/oauth-catch.mjs",
     "pretty": "prettier --write \"./**/*.{js,jsx,ts,tsx,json}\"",
     "build": "wrangler deploy --dry-run --outdir=build src/index.ts",
     "prepublishOnly": "npm run build",

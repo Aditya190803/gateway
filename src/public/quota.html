@@ -3,142 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
   <title>Quota</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,400;0,500;0,600;0,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --paper: #f8f6f3;
-      --paper-2: #fff;
-      --ink: #1a1814;
-      --ink-2: #4a4640;
-      --ink-3: #8a847c;
-      --line: #e8e4de;
-      --accent: #c45c26;
-      --accent-bg: rgba(196, 92, 38, 0.08);
-      --blue: #2563eb;
-      --blue-bg: rgba(37, 99, 235, 0.08);
-      --danger: #b91c1c;
-      --danger-bg: rgba(185, 28, 28, 0.06);
-      --ok: #15803d;
-      --radius: 14px;
-      --radius-sm: 10px;
-      --font: "Figtree", system-ui, sans-serif;
-      --mono: "JetBrains Mono", monospace;
-      --shadow: 0 1px 2px rgba(26, 24, 20, 0.04), 0 12px 40px rgba(26, 24, 20, 0.06);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: var(--font);
-      font-size: 15px;
-      line-height: 1.55;
-      color: var(--ink);
-      background: var(--paper);
-      -webkit-font-smoothing: antialiased;
-    }
-    .wrap { max-width: 1000px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-    header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.35rem; }
-    h1 { font-size: 1.6rem; letter-spacing: -0.02em; margin: 0; }
-    .lead { color: var(--ink-3); font-size: 0.875rem; margin: 0 0 1.75rem; max-width: 62ch; }
-    .spacer { flex: 1; }
-    a { color: var(--blue); }
-    .btn {
-      font: inherit;
-      font-size: 0.8125rem;
-      padding: 0.4rem 0.8rem;
-      border-radius: var(--radius-sm);
-      border: 1px solid var(--line);
-      background: var(--paper-2);
-      color: var(--ink-2);
-      cursor: pointer;
-    }
-    .btn:hover { border-color: var(--ink-3); color: var(--ink); }
-    .muted { color: var(--ink-3); font-size: 0.8125rem; }
-
-    section { margin-bottom: 2.25rem; }
-    .sec-head { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.85rem; }
-    .sec-head h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-3); margin: 0; font-weight: 600; }
-    .sec-head .count { font-size: 0.75rem; color: var(--ink-3); font-family: var(--mono); }
-
-    .card {
-      background: var(--paper-2);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      overflow: hidden;
-    }
-    .row { padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--line); }
-    .row:last-child { border-bottom: none; }
-    .row-top { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
-    .win { font-weight: 600; font-size: 0.9375rem; }
-    .seat { font-size: 0.75rem; color: var(--ink-3); }
-    .seat code { font-family: var(--mono); font-size: 0.9em; }
-    .figure { margin-left: auto; font-family: var(--mono); font-size: 0.8125rem; white-space: nowrap; }
-    .bar-row { display: flex; align-items: center; gap: 0.7rem; }
-    .track { flex: 1; height: 7px; border-radius: 4px; background: var(--line); overflow: hidden; }
-    .fill { height: 100%; border-radius: 4px; background: var(--ok); transition: width 0.25s ease; }
-    /* Colour is the fast read; the number is the detail. */
-    .fill.warn { background: var(--accent); }
-    .fill.crit { background: var(--danger); }
-    .spark { width: 62px; height: 16px; flex: none; opacity: 0.7; }
-    .spark path { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linejoin: round; }
-    .reset { font-size: 0.75rem; color: var(--ink-3); margin-top: 0.3rem; }
-
-    .note {
-      padding: 0.9rem 1.1rem;
-      font-size: 0.8125rem;
-      color: var(--ink-3);
-    }
-    .note.bad { color: var(--danger); background: var(--danger-bg); }
-    .badge {
-      display: inline-block;
-      font-size: 0.65rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      padding: 0.15rem 0.4rem;
-      border-radius: 4px;
-      background: var(--blue-bg);
-      color: var(--blue);
-    }
-    .empty { text-align: center; padding: 3rem 1rem; color: var(--ink-3); }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!--THEME-->
 </head>
 <body>
-  <div class="wrap">
-    <header>
-      <h1>Quota</h1>
-      <span class="spacer"></span>
-      <span id="stamp" class="muted"></span>
-      <button type="button" class="btn" id="refresh">Refresh</button>
-      <a class="btn" href="/admin/dashboard" style="text-decoration:none">Dashboard</a>
-    </header>
-    <p class="lead">
-      What each connected subscription has left at its vendor, grouped by how long the window runs.
-      This is the seat's own quota — not what this gateway has spent.
-    </p>
-    <div id="content"><p class="muted">Loading…</p></div>
-  </div>
+  <main class="content" style="padding-top:0">
+    <div class="content__inner">
+      <header class="bar">
+        <div class="bar__title">
+          <div class="brand" style="margin-bottom:var(--s-4)">
+            <svg class="brand__mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="1.5" y="1.5" width="21" height="21" rx="6" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+              <path d="M6.5 15.5 12 8l5.5 7.5" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.5 15.5h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            </svg>
+            <span class="brand__name">Gateway<span class="brand__sub">Managed proxy</span></span>
+          </div>
+          <h1>Quota</h1>
+          <p>What each connected subscription has left at its vendor, grouped by how long the window runs. This is the seat's own quota, not what this gateway has spent.</p>
+        </div>
+        <div class="bar__actions">
+          <span class="muted" id="stamp"></span>
+          <button type="button" class="btn btn--secondary btn--sm" id="refresh"><span class="btn__spin"></span>Re-read</button>
+          <a class="btn btn--secondary btn--sm" href="/docs">Docs</a>
+          <a class="btn btn--secondary btn--sm" href="/admin/dashboard">Dashboard</a>
+          <button type="button" class="btn btn--quiet btn--icon" id="theme-toggle" aria-label="Switch theme">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div id="content"></div>
+    </div>
+  </main>
 
   <script>
-    const $ = (id) => document.getElementById(id);
+  (function () {
+    'use strict';
+
+    /* Theme, identical to the other pages so a choice made once holds. */
+    var savedTheme = null;
+    try { savedTheme = localStorage.getItem('gw-theme'); } catch (e) { /* private mode */ }
+    var darkQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    function applyTheme(mode) { document.documentElement.dataset.theme = mode === 'dark' ? 'dark' : 'light'; }
+    applyTheme(savedTheme || (darkQuery.matches ? 'dark' : 'light'));
+    darkQuery.addEventListener('change', function (e) { if (!savedTheme) applyTheme(e.matches ? 'dark' : 'light'); });
+    document.getElementById('theme-toggle').onclick = function () {
+      savedTheme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('gw-theme', savedTheme); } catch (e) { /* ignore */ }
+      applyTheme(savedTheme);
+    };
+
+    window.addEventListener('scroll', function () {
+      document.querySelector('.bar').dataset.stuck = window.scrollY > 12 ? 'true' : 'false';
+    }, { passive: true });
+
+    var $ = function (id) { return document.getElementById(id); };
 
     function esc(value) {
-      return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
-        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
-      })[ch]);
+      return String(value == null ? '' : value).replace(/[&<>"']/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+      });
     }
 
     async function api(path) {
-      const r = await fetch('/admin' + path, {
+      var r = await fetch('/admin' + path, {
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
       });
-      const data = await r.json().catch(() => ({}));
+      var data = await r.json().catch(function () { return {}; });
       if (!r.ok) {
-        const err = new Error(data.message || data.error || r.statusText);
+        var err = new Error(data.message || data.error || r.statusText);
         err.status = r.status;
         throw err;
       }
@@ -149,12 +88,12 @@
      * Which section a window belongs in, from the period the vendor stated.
      *
      * Grouping is by duration rather than by the vendor's own naming, because
-     * the names disagree — Codex calls its long window "secondary", Claude
-     * calls the same length "seven day". The period is the one thing they agree
-     * on. Every row still prints its own window length, so the grouping is a
+     * the names disagree: Codex calls its long window "secondary", Claude calls
+     * the same length "seven day". The period is the one thing they agree on.
+     * Every row still prints its own window length, so the grouping is a
      * convenience and never the only way to tell what a row means.
      */
-    const SECTIONS = [
+    var SECTIONS = [
       { id: 'session', title: 'Session', hint: 'Short rolling windows that refill through the day' },
       { id: 'weekly', title: 'Weekly', hint: 'Windows of about a week' },
       { id: 'monthly', title: 'Monthly', hint: 'Billing-cycle and monthly caps' },
@@ -171,7 +110,7 @@
     function periodLabel(hours) {
       if (hours == null) return '';
       if (hours < 24) return Math.round(hours) + 'h window';
-      const days = Math.round(hours / 24);
+      var days = Math.round(hours / 24);
       if (days === 7) return 'weekly window';
       if (days >= 28 && days <= 31) return 'monthly window';
       return days + 'd window';
@@ -179,165 +118,243 @@
 
     function untilLabel(ms) {
       if (!ms) return '';
-      const delta = ms - Date.now();
+      var delta = ms - Date.now();
       if (delta <= 0) return 'resets now';
-      const mins = Math.round(delta / 60000);
+      var mins = Math.round(delta / 60000);
       if (mins < 60) return 'resets in ' + mins + 'm';
-      const hrs = Math.floor(mins / 60);
+      var hrs = Math.floor(mins / 60);
       if (hrs < 48) {
-        const rem = mins % 60;
+        var rem = mins % 60;
         return 'resets in ' + hrs + 'h' + (rem ? ' ' + rem + 'm' : '');
       }
       return 'resets in ' + Math.round(hrs / 24) + 'd';
     }
 
     function tone(pct) {
-      if (pct >= 90) return ' crit';
-      if (pct >= 75) return ' warn';
-      return '';
+      if (pct == null) return 'none';
+      if (pct >= 90) return 'crit';
+      if (pct >= 75) return 'warn';
+      return 'ok';
+    }
+
+    function meter(pct, extra) {
+      return '<div class="meter' + (extra ? ' ' + extra : '') + '">' +
+        '<div class="meter__fill" data-tone="' + tone(pct) + '" data-pct="' + (pct == null ? 0 : pct) + '"' +
+        ' role="progressbar" aria-valuemin="0" aria-valuemax="100"' +
+        (pct == null ? ' aria-valuetext="not reported"' : ' aria-valuenow="' + Math.round(pct) + '"') +
+        '></div></div>';
+    }
+
+    function paintMeters(root) {
+      requestAnimationFrame(function () {
+        Array.prototype.forEach.call((root || document).querySelectorAll('.meter__fill[data-pct]'), function (el) {
+          el.style.width = Math.max(0, Math.min(100, Number(el.dataset.pct))) + '%';
+        });
+      });
     }
 
     /**
      * Recorded history for one window, on a fixed 0-100 scale.
      *
-     * Fitting the line to the data would make a window at 2% look like one at
-     * 90%. Two points is the minimum worth drawing — one sample is not a trend.
+     * Fitting the line to its own data would make a window at 2% look like one
+     * at 90%. Two points is the minimum worth drawing: one sample is not a trend.
      */
     function sparkline(points) {
-      const usable = (points || []).filter((p) => typeof p.p === 'number');
+      var usable = (points || []).filter(function (p) { return typeof p.p === 'number'; });
       if (usable.length < 2) return '';
-      const w = 62, h = 16;
-      const step = w / (usable.length - 1);
-      const d = usable.map((p, i) =>
-        `${i ? 'L' : 'M'}${(i * step).toFixed(1)} ${(h - (Math.max(0, Math.min(100, p.p)) / 100) * h).toFixed(1)}`
-      ).join(' ');
-      const first = Math.round(usable[0].p);
-      const last = Math.round(usable[usable.length - 1].p);
-      return `<svg class="spark" viewBox="0 0 ${w} ${h}" role="img" aria-label="Trend: ${first}% to ${last}%"><title>${usable.length} samples · ${first}% → ${last}%</title><path d="${d}"/></svg>`;
+      var w = 64, h = 18;
+      var step = w / (usable.length - 1);
+      var d = usable.map(function (p, i) {
+        var y = h - (Math.max(0, Math.min(100, p.p)) / 100) * h;
+        return (i ? 'L' : 'M') + (i * step).toFixed(1) + ' ' + y.toFixed(1);
+      }).join(' ');
+      var first = Math.round(usable[0].p);
+      var last = Math.round(usable[usable.length - 1].p);
+      return '<svg class="spark" style="width:4rem;height:1.1rem" viewBox="0 0 ' + w + ' ' + h +
+        '" role="img" aria-label="Trend, ' + first + '% to ' + last + '%"><title>' + usable.length +
+        ' samples, ' + first + '% to ' + last + '%</title><path d="' + d + '"/></svg>';
     }
 
     function renderRow(row) {
-      const pct = typeof row.usedPercent === 'number'
+      var pct = typeof row.usedPercent === 'number'
         ? Math.max(0, Math.min(100, row.usedPercent))
         : null;
-      const figure = pct === null ? 'not reported' : pct.toFixed(0) + '% used';
-      const meta = [untilLabel(row.resetsAt), periodLabel(row.periodHours)]
-        .filter(Boolean).join(' · ');
-      return `<div class="row">
-        <div class="row-top">
-          <span class="win">${esc(row.label)}</span>
-          <span class="seat">${esc(row.seatName)} · <code>${esc(row.seatId)}</code></span>
-          <span class="figure">${esc(figure)}</span>
-        </div>
-        <div class="bar-row">
-          <div class="track"><div class="fill${pct === null ? '' : tone(pct)}" style="width:${pct === null ? 0 : pct}%"></div></div>
-          ${sparkline(row.history)}
-        </div>
-        ${meta ? `<div class="reset">${esc(meta)}</div>` : ''}
-      </div>`;
+      var meta = [untilLabel(row.resetsAt), periodLabel(row.periodHours)].filter(Boolean).join(' · ');
+      return '<div class="record">' +
+        '<div class="record__top"><div>' +
+          '<div class="record__name">' + esc(row.label) + '</div>' +
+          '<div class="record__meta">' + esc(row.seatName) +
+            '<span class="dot">&middot;</span><code class="id">' + esc(row.seatId) + '</code>' +
+            (meta ? '<span class="dot">&middot;</span><span>' + esc(meta) + '</span>' : '') +
+          '</div>' +
+        '</div>' +
+        '<div class="record__actions mono">' +
+          (pct === null ? '<span class="muted">not reported</span>' : pct.toFixed(0) + '% used') +
+        '</div></div>' +
+        '<div class="gauge__bar">' + meter(pct, 'meter--lg') + sparkline(row.history) + '</div>' +
+      '</div>';
+    }
+
+    /**
+     * The one window closest to running out.
+     *
+     * It is the question the page exists to answer, and reading it off a list of
+     * twelve meters is work the page can do instead.
+     */
+    function renderHeadline(rows) {
+      var measured = rows.filter(function (r) { return typeof r.usedPercent === 'number'; });
+      if (!measured.length) return '';
+      var worst = measured.slice().sort(function (a, b) { return b.usedPercent - a.usedPercent; })[0];
+      var pct = Math.max(0, Math.min(100, worst.usedPercent));
+      var verdict = pct >= 90 ? 'Nearly spent.' : pct >= 75 ? 'Running low.' : 'Plenty left.';
+      var reset = untilLabel(worst.resetsAt);
+      return '<div class="section"><div class="panel"><div class="panel__body stack">' +
+        '<div class="figures">' +
+          '<div><span class="figure__value" style="color:var(--' +
+            (pct >= 90 ? 'danger' : pct >= 75 ? 'warn' : 'ok') + ')">' + pct.toFixed(0) + '%</span>' +
+            '<span class="figure__label">Tightest window</span></div>' +
+          '<div class="figure--sub"><span class="figure__value">' + esc(worst.label) + '</span>' +
+            '<span class="figure__label">' + esc(worst.seatName) + '</span></div>' +
+          (reset ? '<div class="figure--sub"><span class="figure__value">' + esc(reset.replace('resets in ', '')) +
+            '</span><span class="figure__label">Until reset</span></div>' : '') +
+        '</div>' +
+        '<p class="muted">' + verdict + ' Nothing else you have connected is closer to its ceiling than this.</p>' +
+        '</div></div></div>';
     }
 
     function renderSections(rows, problems) {
-      const parts = [];
+      var parts = [renderHeadline(rows)];
 
-      for (const section of SECTIONS) {
-        const inSection = rows.filter((r) => sectionOf(r.periodHours) === section.id);
-        if (!inSection.length) continue;
+      SECTIONS.forEach(function (section) {
+        var inSection = rows.filter(function (r) { return sectionOf(r.periodHours) === section.id; });
+        if (!inSection.length) return;
         // Fullest first: the page exists to answer "what is about to run out".
-        inSection.sort((a, b) => (b.usedPercent ?? -1) - (a.usedPercent ?? -1));
-        parts.push(`<section>
-          <div class="sec-head">
-            <h2>${esc(section.title)}</h2>
-            <span class="count">${inSection.length}</span>
-            <span class="muted">${esc(section.hint)}</span>
-          </div>
-          <div class="card">${inSection.map(renderRow).join('')}</div>
-        </section>`);
-      }
+        inSection.sort(function (a, b) {
+          return (b.usedPercent == null ? -1 : b.usedPercent) - (a.usedPercent == null ? -1 : a.usedPercent);
+        });
+        parts.push('<div class="section">' +
+          '<div class="section__head"><h2>' + esc(section.title) + '</h2>' +
+          '<span class="count">' + inSection.length + '</span>' +
+          '<p>' + esc(section.hint) + '</p></div>' +
+          '<div class="records">' + inSection.map(renderRow).join('') + '</div></div>');
+      });
 
       if (problems.length) {
-        parts.push(`<section>
-          <div class="sec-head"><h2>Not reporting</h2><span class="count">${problems.length}</span></div>
-          <div class="card">${problems.map((p) => `<div class="note ${p.kind === 'error' ? 'bad' : ''}">
-            <strong>${esc(p.seatName)}</strong> <code style="font-family:var(--mono);font-size:0.85em">${esc(p.seatId)}</code>
-            ${p.kind === 'unsupported' ? '<span class="badge">no usage endpoint</span>' : ''}
-            — ${esc(p.message)}
-          </div>`).join('')}</div>
-        </section>`);
+        parts.push('<div class="section">' +
+          '<div class="section__head"><h2>Not reporting</h2>' +
+          '<span class="count">' + problems.length + '</span>' +
+          '<p>Connected seats that returned no usable figures. A vendor with no usage endpoint is working as intended; an error is not.</p></div>' +
+          '<div class="records">' + problems.map(function (p) {
+            return '<div class="record"><div class="record__top"><div>' +
+              '<div class="record__name">' + esc(p.seatName) +
+                (p.kind === 'unsupported' ? ' <span class="badge">no usage endpoint</span>' : '') +
+                (p.kind === 'empty' ? ' <span class="badge">no windows reported</span>' : '') +
+                (p.kind === 'error' ? ' <span class="badge badge--danger">error</span>' : '') +
+              '</div>' +
+              '<div class="record__meta"><code class="id">' + esc(p.seatId) + '</code></div>' +
+              '</div></div>' +
+              '<p class="muted">' + esc(p.message) + '</p></div>';
+          }).join('') + '</div></div>');
       }
 
-      if (!parts.length) {
-        parts.push('<div class="empty">No subscription accounts are reporting limits yet.<br>Connect one from the <a href="/admin/dashboard">dashboard</a>.</div>');
+      if (parts.join('') === '') {
+        return '<div class="section"><div class="records">' + [
+          '<div class="empty"><strong>Nothing is reporting limits yet</strong>',
+          '<p>Connect a subscription account from the <a href="/admin/dashboard">dashboard</a>, and its vendor windows appear here within the hour.</p></div>',
+        ].join('') + '</div></div>';
       }
       return parts.join('');
     }
 
+    function skeleton() {
+      var rows = '';
+      for (var i = 0; i < 3; i++) {
+        rows += '<div class="record"><div class="record__top"><div>' +
+          '<div class="record__name"><span class="skeleton">reading limits</span></div>' +
+          '<div class="record__meta"><span class="skeleton">from the vendor</span></div>' +
+          '</div></div><div class="meter meter--lg"></div></div>';
+      }
+      return '<div class="section"><div class="records">' + rows + '</div></div>';
+    }
+
     async function loadSeat(seat) {
       // History is stored locally by the hourly sampler, so it never slows the
-      // live lookup down; both go out together.
-      const [usage, history] = await Promise.allSettled([
+      // live lookup down. Both go out together.
+      var results = await Promise.allSettled([
         api('/oauth/' + encodeURIComponent(seat.id) + '/usage'),
         api('/oauth/' + encodeURIComponent(seat.id) + '/history'),
       ]);
+      var usage = results[0];
+      var history = results[1];
 
       if (usage.status === 'rejected') {
         return { problem: { seatId: seat.id, seatName: seat.name, kind: 'error', message: usage.reason.message } };
       }
-      const data = usage.value;
+      var data = usage.value;
       if (data.status === 'unsupported') {
         return { problem: { seatId: seat.id, seatName: seat.name, kind: 'unsupported', message: data.message } };
       }
 
-      const series = history.status === 'fulfilled' ? (history.value.series || {}) : {};
-      const rows = (data.windows || []).map((w) => ({
-        ...w,
-        seatId: seat.id,
-        seatName: seat.name,
-        history: series[w.id],
-      }));
+      var series = history.status === 'fulfilled' ? (history.value.series || {}) : {};
+      var rows = (data.windows || []).map(function (w) {
+        return Object.assign({}, w, { seatId: seat.id, seatName: seat.name, history: series[w.id] });
+      });
       if (!rows.length) {
-        return { problem: { seatId: seat.id, seatName: seat.name, kind: 'empty', message: 'The vendor reported no limit windows for this account.' } };
+        return { problem: {
+          seatId: seat.id, seatName: seat.name, kind: 'empty',
+          message: 'The vendor reported no limit windows for this account.',
+        } };
       }
-      return { rows };
+      return { rows: rows };
     }
 
     async function load() {
-      const content = $('content');
-      content.innerHTML = '<p class="muted">Reading limits from each vendor…</p>';
+      var content = $('content');
+      var btn = $('refresh');
+      btn.dataset.busy = 'true';
+      content.innerHTML = skeleton();
       $('stamp').textContent = '';
 
-      let providers;
+      var providers;
       try {
-        ({ providers } = await api('/oauth/providers'));
+        providers = (await api('/oauth/providers')).providers || [];
       } catch (e) {
         // Told apart because they need different actions: sign in, or ask an
         // admin. Anything else is reported as itself.
-        const message = e.status === 401
-          ? 'Sign in first — <a href="/admin/dashboard">open the dashboard</a>, then come back.'
+        var message = e.status === 401
+          ? 'Sign in first. <a href="/admin/dashboard">Open the dashboard</a>, then come back.'
           : e.status === 403
             ? 'Subscription limits are visible to admins only.'
             : esc(e.message);
-        content.innerHTML = `<div class="card"><div class="note bad">${message}</div></div>`;
+        content.innerHTML = '<div class="section"><div class="note note--bad">' + message + '</div></div>';
+        btn.dataset.busy = 'false';
         return;
       }
 
       if (!providers.length) {
-        content.innerHTML = '<div class="empty">No subscription accounts connected.<br>Connect one from the <a href="/admin/dashboard">dashboard</a>.</div>';
+        content.innerHTML = '<div class="section"><div class="records"><div class="empty">' +
+          '<strong>No subscription accounts connected</strong>' +
+          '<p>Connect a ChatGPT, Claude, Grok, Antigravity or Kimi seat from the ' +
+          '<a href="/admin/dashboard">dashboard</a> to see what it has left.</p></div></div></div>';
+        btn.dataset.busy = 'false';
         return;
       }
 
       // In parallel across seats: each is a different vendor, so they do not
       // contend with one another the way repeated calls to one vendor would.
-      const results = await Promise.all(providers.map(loadSeat));
-      const rows = results.flatMap((r) => r.rows || []);
-      const problems = results.filter((r) => r.problem).map((r) => r.problem);
+      var results = await Promise.all(providers.map(loadSeat));
+      var rows = results.reduce(function (acc, r) { return acc.concat(r.rows || []); }, []);
+      var problems = results.filter(function (r) { return r.problem; }).map(function (r) { return r.problem; });
 
       content.innerHTML = renderSections(rows, problems);
-      $('stamp').textContent = 'as of ' + new Date().toLocaleTimeString();
+      paintMeters(content);
+      $('stamp').textContent = 'read at ' + new Date().toLocaleTimeString();
+      btn.dataset.busy = 'false';
     }
 
     $('refresh').onclick = load;
     load();
+  })();
   </script>
 </body>
 </html>

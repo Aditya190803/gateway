@@ -11,7 +11,7 @@ migrations_dir = "migrations"
 
 [[rules]]
 type = "Text"
-globs = ["**/*.html"]
+globs = ["**/*.html", "**/*.css"]
 fallthrough = true
 
 # Samples each connected subscription's vendor quota, alerts on threshold

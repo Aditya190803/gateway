@@ -7,7 +7,9 @@ import {
 } from '../../managed/injectProvider';
 import {
   matchProvidersWithDefaults,
+  parseExplicitTarget,
   parseModelsJson,
+  parseVendorAlias,
 } from '../../managed/modelRouting';
 import { vendorRoutable, vendorServesPath } from '../../managed/oauth';
 import {
@@ -72,6 +74,34 @@ async function extractModelFromRequest(c: Context): Promise<string | null> {
     }
   }
   return null;
+}
+
+/**
+ * Strip the `provider/` prefix before the request leaves the gateway — the
+ * vendor has never heard of the provider id and would reject or mis-route a
+ * model name it doesn't recognise.
+ */
+async function rewriteModelInBody(req: Request, model: string): Promise<Request> {
+  const headers = new Headers(req.headers);
+  headers.delete('content-length');
+  const ct = req.headers.get('content-type')?.split(';')[0]?.trim() ?? '';
+
+  if (ct === 'multipart/form-data') {
+    // Rebuilding the form regenerates the boundary, so the stale
+    // content-type (which pins the old boundary) has to go too.
+    const form = await req.clone().formData();
+    if (form.has('model')) form.set('model', model);
+    headers.delete('content-type');
+    return new Request(req.url, { method: req.method, headers, body: form });
+  }
+
+  const json = (await req.clone().json()) as Record<string, unknown>;
+  json.model = model;
+  return new Request(req.url, {
+    method: req.method,
+    headers,
+    body: JSON.stringify(json),
+  });
 }
 
 function defaultModelForPath(path: string): string | null {
@@ -239,7 +269,62 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     (p) => p.authType !== 'oauth' || vendorServesPath(p.vendor, path)
   );
 
-  const matched = matchProvidersWithDefaults(model!, routableProviders);
+  // `provider_id/model` names a specific row rather than leaving it to prefix
+  // matching. Checked against `servable` (not `routableProviders`) so a target
+  // that exists but can't serve this path gets a clear error instead of
+  // silently falling through to a prefix guess.
+  const explicitTarget = model
+    ? parseExplicitTarget(
+        model,
+        servable.map((p) => p.id)
+      )
+    : null;
+
+  if (
+    explicitTarget &&
+    !routableProviders.some((p) => p.id === explicitTarget.providerId)
+  ) {
+    return c.json(
+      {
+        error: {
+          message: `Provider "${explicitTarget.providerId}" cannot serve ${path}`,
+          type: 'invalid_request_error',
+        },
+      },
+      400
+    );
+  }
+
+  // `alias/model` (e.g. `anti/gemini-3-pro`) names a vendor rather than one
+  // row, so every provider for that vendor competes for the request exactly
+  // like plain prefix matching would — weight, cooldown and failover all
+  // still apply across however many seats are connected. Only tried when
+  // there was no exact provider-id match above, so a provider actually named
+  // "codex" still wins over the alias.
+  const vendorAlias = !explicitTarget && model ? parseVendorAlias(model) : null;
+
+  if (
+    vendorAlias &&
+    !routableProviders.some((p) => p.vendor === vendorAlias.vendor)
+  ) {
+    return c.json(
+      {
+        error: {
+          message: `No connected "${vendorAlias.alias}" seat can serve ${path}`,
+          type: 'invalid_request_error',
+        },
+      },
+      400
+    );
+  }
+
+  const matched = explicitTarget
+    ? [explicitTarget.providerId]
+    : vendorAlias
+      ? routableProviders
+          .filter((p) => p.vendor === vendorAlias.vendor)
+          .map((p) => p.id)
+      : matchProvidersWithDefaults(model!, routableProviders);
   const byId = new Map(routableProviders.map((p) => [p.id, p]));
 
   // A retry must not land on the credential that just failed, so providers
@@ -315,11 +400,20 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
 
   c.set(MANAGED_PROVIDER, providerId);
 
+  const strippedModel = explicitTarget?.model ?? vendorAlias?.model ?? null;
+  let forwardRequest = c.req.raw;
+  if (strippedModel) {
+    const ct = c.req.header('content-type')?.split(';')[0]?.trim() ?? '';
+    if (ct === 'application/json' || ct === 'multipart/form-data') {
+      forwardRequest = await rewriteModelInBody(forwardRequest, strippedModel);
+    }
+  }
+
   c.req.raw = applyProviderHeaders(
-    c.req.raw,
+    forwardRequest,
     providerId,
     credential.value,
-    c.req.raw.body
+    forwardRequest.body
   );
 
   const startedAt = Date.now();
