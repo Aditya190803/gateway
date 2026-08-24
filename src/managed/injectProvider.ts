@@ -182,27 +182,11 @@ export async function fetchProviderModelsList(
   }));
 }
 
-export async function aggregateModelsFromProviders(
-  env: ManagedEnv,
-  providerIds: string[]
-): Promise<{ object: string; data: { id: string; object: string; owned_by: string }[] }> {
-  const seen = new Set<string>();
-  const data: { id: string; object: string; owned_by: string }[] = [];
-  for (const id of providerIds) {
-    const models = await modelsForProvider(env, id);
-    for (const m of models) {
-      if (seen.has(m.id)) continue;
-      seen.add(m.id);
-      data.push(m);
-    }
-  }
-  return { object: 'list', data };
-}
-
 /**
- * Same walk as {@link aggregateModelsFromProviders}, but keeps attribution:
+ * Same walk for every servable provider, keeping attribution:
  * every model carries the ids of all servable providers claiming it, which is
- * what a model catalog needs to show `provider_id/model` routing targets.
+ * what a model catalog needs to show `provider_id/model` routing targets and
+ * what even the flat listing needs to say which seats serve each model.
  * The first claimant's `owned_by` wins, matching the flat listing.
  */
 export async function aggregateModelsVerbose(

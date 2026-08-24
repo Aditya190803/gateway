@@ -1,7 +1,6 @@
 import { Context, Next } from 'hono';
 import { hashApiKey } from '../../managed/apiKeys';
 import {
-  aggregateModelsFromProviders,
   aggregateModelsVerbose,
   applyProviderHeaders,
   resolveProviderCredential,
@@ -274,17 +273,31 @@ export const managedProxyMiddleware = async (c: Context, next: Next) => {
     }
     c.executionCtx.waitUntil(recordRequestForRpm(env.DB, keyRow.id));
 
-    // OpenAI-compatible flat listing stays the default. `?verbose=1` adds the
-    // routing forms (`alias/model`, `provider_id/model`, bare) plus seat
-    // health and last-24h usage — what a copy-paste model catalog needs.
+    // OpenAI-compatible listing stays the default, with each model's serving
+    // providers riding along as extra fields — OpenAI SDK clients ignore
+    // unknown fields, and without them a caller sees only `owned_by` (the
+    // first claimant's row id) and cannot tell which seats actually serve the
+    // model, which is what the /models catalog shows.
+    const verboseList = await aggregateModelsVerbose(env, ids);
+    const vendorById = new Map(providerModels.map((p) => [p.id, p.vendor]));
+
     const verbose =
       new URL(c.req.url).searchParams.get('verbose') === '1';
     if (!verbose) {
-      const list = await aggregateModelsFromProviders(env, ids);
-      return c.json(list);
+      return c.json({
+        object: 'list',
+        data: verboseList.data.map((m) => ({
+          id: m.id,
+          object: m.object,
+          owned_by: m.owned_by,
+          vendor:
+            m.provider_ids
+              .map((id) => vendorById.get(id))
+              .find((v) => v) ?? null,
+          provider_ids: m.provider_ids,
+        })),
+      });
     }
-
-    const verboseList = await aggregateModelsVerbose(env, ids);
     const seatById = new Map(providerModels.map((p) => [p.id, p]));
     let stats: Map<string, { requests: number; avg_ms: number | null }>;
     try {
