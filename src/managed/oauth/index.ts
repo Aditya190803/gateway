@@ -31,6 +31,8 @@ export {
   persistTokens,
   decryptTokens,
   forceRefresh,
+  reinstateIfAutoDisabled,
+  getOAuthProviderRowAnyState,
 } from './store';
 export type { QuotaSnapshot, QuotaWindow } from './quota';
 export * from './types';

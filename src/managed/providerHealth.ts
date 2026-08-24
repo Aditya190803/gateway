@@ -132,7 +132,7 @@ export async function recordProviderFailure(
           kind,
           Date.now(),
           message.slice(0, 500),
-          `Deactivated automatically after ${failures} consecutive authentication failures. Reconnect the account, then re-enable it.`,
+          `Deactivated automatically after ${failures} consecutive authentication failures. The gateway retries the credential each hour and reinstates the seat automatically once its token refreshes; if the vendor revoked the account, reconnect it from Subscriptions.`,
           providerId
         )
         .run();

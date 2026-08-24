@@ -7,6 +7,7 @@ import { createPkcePair, generateState, parsePastedCode } from './oauth/pkce';
 import {
   forceRefresh,
   getOAuthProviderRow,
+  reinstateIfAutoDisabled,
   resolveOAuthCredential,
 } from './oauth/store';
 import type { OAuthAdapter, OAuthTokens } from './oauth/types';
@@ -1237,6 +1238,9 @@ export function createOAuthRoutes(
       const status = result.message === 'Not an OAuth provider' ? 404 : 502;
       return c.json({ status: 'failure', message: result.message }, status);
     }
+    // A refresh that succeeded is proof the grant is valid, so an automatic
+    // deactivation no longer needs its own button press to undo.
+    await reinstateIfAutoDisabled(c.env.DB, c.req.param('id'));
     return c.json({
       status: 'success',
       expires_at: new Date(result.tokens.expires_at).toISOString(),

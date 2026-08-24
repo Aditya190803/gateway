@@ -11,7 +11,8 @@
  * aborts on the first error and leaves the table growing.
  */
 
-import { resolveOAuthCredential } from './oauth';
+import { forceRefresh, reinstateIfAutoDisabled, resolveOAuthCredential } from './oauth';
+import { REFRESH_SKEW_MS } from './oauth/types';
 import type { QuotaSnapshot } from './oauth/quota';
 import type { ManagedEnv } from './types';
 
@@ -28,6 +29,16 @@ const DEFAULT_LOG_RETENTION_DAYS = 30;
 /** Quota history outlives request logs: it is small and the trend is the point. */
 const SNAPSHOT_RETENTION_DAYS = 90;
 
+/**
+ * Refresh any access token expiring inside this window.
+ *
+ * The cron runs hourly, so a two-hour horizon means every token is refreshed
+ * at least an hour before its expiry-minus-skew moment — an idle weekend no
+ * longer turns the first Monday request into a synchronous refresh, or into
+ * the auth failures that get a seat deactivated.
+ */
+const PROACTIVE_REFRESH_MS = 2 * 60 * 60 * 1000;
+
 /** Rows deleted per pass, so one run cannot exceed D1's statement limits. */
 const PRUNE_BATCH = 5000;
 
@@ -35,6 +46,8 @@ export type ScheduledReport = {
   seatsSampled: number;
   windowsRecorded: number;
   alertsRaised: number;
+  tokensRefreshed: number;
+  seatsReinstated: number;
   logsPruned: number;
   snapshotsPruned: number;
   errors: string[];
@@ -81,6 +94,66 @@ async function connectedSeats(
       ORDER BY id`
   ).all<{ id: string; name: string }>();
   return rows.results ?? [];
+}
+
+/**
+ * Active seats whose stored access token expires within the proactive
+ * horizon (or has already passed it).
+ */
+async function seatsWithExpiringTokens(
+  env: ManagedEnv
+): Promise<{ id: string; name: string }[]> {
+  const deadline = Date.now() + REFRESH_SKEW_MS + PROACTIVE_REFRESH_MS;
+  const rows = await env.DB.prepare(
+    `SELECT id, name FROM providers
+      WHERE auth_type = 'oauth' AND is_active = 1
+        AND oauth_expires_at IS NOT NULL AND oauth_expires_at <= ?
+      ORDER BY id`
+  )
+    .bind(deadline)
+    .all<{ id: string; name: string }>();
+  return rows.results ?? [];
+}
+
+/**
+ * Seats the gateway itself deactivated after consecutive auth failures.
+ *
+ * A successful refresh proves the account's grant is still valid at the
+ * vendor, which is exactly the evidence an automatic deactivation was missing,
+ * so the seat goes straight back into rotation. One that was revoked by the
+ * vendor keeps failing the refresh and stays out.
+ */
+async function autoDisabledSeats(
+  env: ManagedEnv
+): Promise<{ id: string; name: string }[]> {
+  const rows = await env.DB.prepare(
+    `SELECT id, name FROM providers
+      WHERE auth_type = 'oauth' AND is_active = 0
+        AND disabled_reason IS NOT NULL
+      ORDER BY id`
+  ).all<{ id: string; name: string }>();
+  return rows.results ?? [];
+}
+
+/**
+ * Refresh one seat's credentials out-of-band.
+ *
+ * Returns true when the token changed; a failed refresh is reported into the
+ * run's errors and returns false, so callers can gate follow-up actions
+ * (reinstatement) on actual success.
+ */
+async function refreshTokenForSeat(
+  env: ManagedEnv,
+  seat: { id: string; name: string },
+  report: ScheduledReport
+): Promise<boolean> {
+  const result = await forceRefresh(env, seat.id);
+  if (!result.ok) {
+    report.errors.push(`${seat.id}: refresh failed — ${result.message}`);
+    return false;
+  }
+  report.tokensRefreshed++;
+  return true;
 }
 
 /**
@@ -209,6 +282,8 @@ export async function runScheduled(env: ManagedEnv): Promise<ScheduledReport> {
     seatsSampled: 0,
     windowsRecorded: 0,
     alertsRaised: 0,
+    tokensRefreshed: 0,
+    seatsReinstated: 0,
     logsPruned: 0,
     snapshotsPruned: 0,
     errors: [],
@@ -216,6 +291,52 @@ export async function runScheduled(env: ManagedEnv): Promise<ScheduledReport> {
   if (!env.DB) {
     report.errors.push('D1 not configured');
     return report;
+  }
+
+  // Heal deactivated seats before anything reads the active set, so a seat
+  // this run revives can also be sampled below instead of waiting an hour.
+  let disabled: { id: string; name: string }[] = [];
+  try {
+    disabled = await autoDisabledSeats(env);
+  } catch (e) {
+    report.errors.push(
+      `disabled-seat listing failed: ${e instanceof Error ? e.message : 'unknown'}`
+    );
+  }
+  // Sequential like sampling below: one refresh round trip per seat, spaced
+  // out, is not the burst pattern vendors rate-limit desktop clients for.
+  for (const seat of disabled) {
+    try {
+      if (
+        (await refreshTokenForSeat(env, seat, report)) &&
+        (await reinstateIfAutoDisabled(env.DB, seat.id))
+      ) {
+        report.seatsReinstated++;
+      }
+    } catch (e) {
+      report.errors.push(
+        `${seat.id}: ${e instanceof Error ? e.message : 'recovery failed'}`
+      );
+    }
+  }
+
+  // Refresh tokens nearing expiry so requests never meet a stale one.
+  let expiring: { id: string; name: string }[] = [];
+  try {
+    expiring = await seatsWithExpiringTokens(env);
+  } catch (e) {
+    report.errors.push(
+      `expiry scan failed: ${e instanceof Error ? e.message : 'unknown'}`
+    );
+  }
+  for (const seat of expiring) {
+    try {
+      await refreshTokenForSeat(env, seat, report);
+    } catch (e) {
+      report.errors.push(
+        `${seat.id}: ${e instanceof Error ? e.message : 'refresh crashed'}`
+      );
+    }
   }
 
   let seats: { id: string; name: string }[] = [];

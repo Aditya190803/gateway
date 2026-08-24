@@ -34,6 +34,27 @@ export async function getOAuthProviderRow(
   return row ?? null;
 }
 
+/**
+ * Same row regardless of active state.
+ *
+ * Refreshing a credential must not require the seat to already be in service:
+ * an auto-disabled seat's grant can be perfectly valid at the vendor, and
+ * requiring a Reinstate click before Refresh would make recovery two manual
+ * steps where one would do.
+ */
+export async function getOAuthProviderRowAnyState(
+  env: ManagedEnv,
+  providerId: string,
+): Promise<OAuthProviderRow | null> {
+  if (!env.DB) return null;
+  const row = await env.DB.prepare(
+    `SELECT ${OAUTH_COLUMNS} FROM providers WHERE id = ? AND auth_type = 'oauth' LIMIT 1`,
+  )
+    .bind(providerId)
+    .first<OAuthProviderRow>();
+  return row ?? null;
+}
+
 export function isOAuthProvider(row: { auth_type?: string | null }): boolean {
   return row.auth_type === 'oauth';
 }
@@ -296,6 +317,35 @@ export async function resolveOAuthCredential(
 }
 
 /**
+ * Re-activate a seat the gateway itself deactivated.
+ *
+ * Only automatic deactivations are lifted: `disabled_reason` is written by the
+ * auth-failure auto-disable and by nothing else, so an operator's own manual
+ * disable is never overridden. The failure run is cleared with it, so if the
+ * credential really is still broken the next upstream 401 starts counting from
+ * one — a broken seat re-disables itself after its own evidence, rather than
+ * staying dead until someone clicks Reinstate.
+ */
+export async function reinstateIfAutoDisabled(
+  db: D1Database,
+  providerId: string,
+): Promise<boolean> {
+  if (!db) return false;
+  const result = await db.prepare(
+    `UPDATE providers
+        SET is_active = 1,
+            failure_count = 0,
+            cooldown_until = NULL,
+            cooldown_reason = NULL,
+            disabled_reason = NULL
+      WHERE id = ? AND is_active = 0 AND disabled_reason IS NOT NULL`,
+  )
+    .bind(providerId)
+    .run();
+  return (result.meta?.changes ?? 0) > 0;
+}
+
+/**
  * Refresh on demand, taking the same claim the request path takes so an
  * operator pressing "Refresh" cannot double-spend the token against a refresh
  * already in flight.
@@ -304,7 +354,9 @@ export async function forceRefresh(
   env: ManagedEnv,
   providerId: string,
 ): Promise<{ ok: true; tokens: OAuthTokens } | { ok: false; message: string }> {
-  const row = await getOAuthProviderRow(env, providerId);
+  // Any-state on purpose: see getOAuthProviderRowAnyState. A deactivated seat
+  // is exactly the one whose credential most needs proving.
+  const row = await getOAuthProviderRowAnyState(env, providerId);
   if (!row || !isOAuthProvider(row)) {
     return { ok: false, message: 'Not an OAuth provider' };
   }
