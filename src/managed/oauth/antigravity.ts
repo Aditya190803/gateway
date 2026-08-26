@@ -90,9 +90,17 @@ const QUOTA_BASES = [
 const TOKEN_TIMEOUT_MS = 15000;
 const CALL_TIMEOUT_MS = 15000;
 
-/** Client identity the v1internal fleet expects. */
+/**
+ * Client identity the v1internal fleet expects.
+ *
+ * Cloud Code gates newer models (and, per google-antigravity/cli-proxy-api#5175,
+ * sometimes the generation RPC itself) on this version string being at or above
+ * whatever the Hub auto-updater currently reports. Check
+ * https://antigravity-hub-auto-updater-974169037036.us-central1.run.app/manifest/latest-arm64-mac.yml
+ * and bump this when generation starts failing again.
+ */
 const CLIENT_HEADERS: Record<string, string> = {
-  'user-agent': 'antigravity/hub/2.2.1 darwin/arm64',
+  'user-agent': 'antigravity/hub/2.10.0 darwin/arm64',
   accept: '*/*',
 };
 

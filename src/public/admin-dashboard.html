@@ -310,7 +310,7 @@
             <div class="section__head">
               <h2>Connected</h2>
               <span class="count" id="oauth-count">&mdash;</span>
-              <p>Limits are read live from each vendor. This is the seat's own quota, not what this gateway spent.</p>
+              <p>Vendor quota for these seats lives on the <a href="/quota">Quota page</a>, not here.</p>
             </div>
             <div class="records" id="oauth-list"></div>
           </div>
@@ -695,28 +695,6 @@
       });
     }
 
-    /**
-     * Recorded history for one window, on a fixed 0-100 scale.
-     *
-     * Fitting the line to its own data would make a window at 2% look like one
-     * at 90%. Two points is the minimum worth drawing: one sample is not a trend.
-     */
-    function sparkline(points) {
-      var usable = (points || []).filter(function (p) { return typeof p.p === 'number'; });
-      if (usable.length < 2) return '';
-      var w = 56, h = 16;
-      var step = w / (usable.length - 1);
-      var d = usable.map(function (p, i) {
-        var y = h - (Math.max(0, Math.min(100, p.p)) / 100) * h;
-        return (i ? 'L' : 'M') + (i * step).toFixed(1) + ' ' + y.toFixed(1);
-      }).join(' ');
-      var first = Math.round(usable[0].p);
-      var last = Math.round(usable[usable.length - 1].p);
-      return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" role="img" aria-label="Trend, ' +
-        first + '% to ' + last + '%"><title>' + usable.length + ' samples, ' + first + '% to ' + last +
-        '%</title><path d="' + d + '"/></svg>';
-    }
-
     function skeletonRows(count, cols) {
       var out = '';
       for (var i = 0; i < count; i++) {
@@ -740,27 +718,6 @@
 
     function emptyState(title, body) {
       return '<div class="empty"><strong>' + esc(title) + '</strong><p>' + body + '</p></div>';
-    }
-
-    function untilLabel(ms) {
-      if (!ms) return '';
-      var delta = ms - Date.now();
-      if (delta <= 0) return 'resets now';
-      var mins = Math.round(delta / 60000);
-      if (mins < 60) return 'resets in ' + mins + 'm';
-      var hrs = Math.floor(mins / 60);
-      if (hrs < 48) {
-        var rem = mins % 60;
-        return 'resets in ' + hrs + 'h' + (rem ? ' ' + rem + 'm' : '');
-      }
-      return 'resets in ' + Math.round(hrs / 24) + 'd';
-    }
-
-    function periodLabel(hours) {
-      if (!hours) return '';
-      if (hours < 24) return Math.round(hours) + 'h window';
-      var days = Math.round(hours / 24);
-      return days === 7 ? 'weekly window' : days + 'd window';
     }
 
     function expiryAbsolute(at) {
@@ -848,7 +805,6 @@
        question cannot be asked again after the vendor round trip. */
     var oauthOverwrite = false;
     var devicePollTimer = null;
-    var quotaCache = {};
 
     /* ---------------------------------------------------------------- views */
     function showView(name) {
@@ -1564,111 +1520,6 @@
       $('o-vendor').scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
-    function renderLimits(id) {
-      var cell = document.querySelector('[data-limits="' + CSS.escape(id) + '"]');
-      if (!cell) return;
-      var entry = quotaCache[id];
-
-      if (!entry || entry.state === 'loading') {
-        cell.innerHTML = '<div class="gauge"><div class="gauge__head"><span class="skeleton">reading limits from the vendor</span></div>' +
-          '<div class="meter"></div></div>';
-        return;
-      }
-
-      if (entry.state === 'error') {
-        // One seat's limits failing says nothing about the others, so this is a
-        // note on the record rather than an error on the page.
-        cell.innerHTML = '<div class="note note--bad"><div><strong>Limits unavailable.</strong> ' +
-          esc(entry.message) + '</div></div>';
-      } else if (entry.state === 'unsupported') {
-        cell.innerHTML = '<p class="muted">' + esc(entry.message) + '</p>';
-      } else {
-        var q = entry.data;
-        var windows = q.windows || [];
-        var gauges = windows.map(function (w) {
-          var pct = typeof w.usedPercent === 'number' ? Math.max(0, Math.min(100, w.usedPercent)) : null;
-          var detail = [
-            pct === null ? 'not reported' : pct.toFixed(0) + '% used',
-            untilLabel(w.resetsAt),
-            periodLabel(w.periodHours),
-          ].filter(Boolean).join(' · ');
-          return '<div class="gauge">' +
-            '<div class="gauge__head"><span>' + esc(w.label) + '</span><span>' + esc(detail) + '</span></div>' +
-            '<div class="gauge__bar">' + meter(pct) + sparkline((entry.history || {})[w.id]) + '</div>' +
-            '</div>';
-        }).join('');
-
-        var head = '<div class="record__meta">' +
-          '<span class="strong">Vendor limits</span>' +
-          (q.plan ? '<span class="dot">&middot;</span><span>' + esc(q.plan) + ' plan</span>' : '') +
-          '<span class="dot">&middot;</span><span>read ' + esc(new Date(q.fetchedAt).toLocaleTimeString()) + '</span>' +
-          '<span class="dot">&middot;</span><button type="button" class="link" data-relimit="' + esc(id) + '">Re-read</button>' +
-          // Rendered greyed out rather than hidden when unavailable: discovering
-          // the action exists is separate from being able to use it.
-          (q.action
-            ? '<span class="dot">&middot;</span><button type="button" class="link" data-quota-action="' + esc(id) +
-              '" data-action-id="' + esc(q.action.id) + '"' + (q.action.available ? '' : ' disabled') + '>' +
-              esc(q.action.label) + '</button>'
-            : '') +
-          '</div>';
-
-        var notes = (q.notes || []).map(function (n) {
-          return '<p class="muted">' + esc(n) + '</p>';
-        }).join('');
-
-        cell.innerHTML = head +
-          (gauges ? '<div class="gauges">' + gauges + '</div>'
-                  : '<p class="muted">The vendor reported no limit windows for this account.</p>') +
-          notes;
-        paintMeters(cell);
-      }
-
-      var again = cell.querySelector('[data-relimit]');
-      if (again) again.onclick = function () { loadLimits(id); };
-
-      var action = cell.querySelector('[data-quota-action]:not([disabled])');
-      if (action) {
-        confirmable(action, 'Spend a credit?', function () {
-          run(action, async function () {
-            try {
-              await api('/oauth/' + encodeURIComponent(id) + '/quota-action', {
-                method: 'POST',
-                body: JSON.stringify({ action: action.dataset.actionId }),
-              });
-            } catch (e) {
-              toast(e.message, 'bad');
-            }
-            // Re-read either way: the credit may have been spent before the error.
-            await loadLimits(id);
-          });
-        });
-      }
-    }
-
-    async function loadLimits(id) {
-      quotaCache[id] = { state: 'loading' };
-      renderLimits(id);
-      // History is recorded by the scheduled sampler, so it is a local read and
-      // never the reason the live lookup is slow. Both go out together.
-      var results = await Promise.allSettled([
-        api('/oauth/' + encodeURIComponent(id) + '/usage'),
-        api('/oauth/' + encodeURIComponent(id) + '/history'),
-      ]);
-      var usage = results[0];
-      var history = results[1];
-      var series = history.status === 'fulfilled' ? (history.value.series || {}) : {};
-
-      if (usage.status === 'rejected') {
-        quotaCache[id] = { state: 'error', message: usage.reason.message };
-      } else {
-        var r = usage.value;
-        quotaCache[id] = r.status === 'unsupported'
-          ? { state: 'unsupported', message: r.message }
-          : { state: 'ok', data: r, history: series };
-      }
-      renderLimits(id);
-    }
-
     async function refreshOAuth() {
       if (!me || me.role !== 'admin') return;
       var box = $('oauth-list');
@@ -1733,15 +1584,8 @@
               ' <button type="button" class="link" data-o-clone="' + esc(p.id) + '">Add another seat</button>' +
             '</dd></div>' +
           '</dl></div>' +
-
-          '<div data-limits="' + esc(p.id) + '"></div>' +
         '</div>';
       }).join('');
-
-      // Limits come live from each vendor, so the records render first and each
-      // fills in as its answer arrives rather than blocking the list.
-      providers.forEach(function (p) { renderLimits(p.id); });
-      providers.forEach(function (p) { if (!quotaCache[p.id]) loadLimits(p.id); });
 
       all('[data-o-refresh]', box).forEach(function (btn) {
         btn.onclick = function () {
