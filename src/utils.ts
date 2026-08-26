@@ -2,6 +2,7 @@ import {
   ANTHROPIC,
   COHERE,
   GOOGLE,
+  GOOGLE_ANTIGRAVITY,
   GOOGLE_VERTEX_AI,
   PERPLEXITY_AI,
   DEEPINFRA,
@@ -27,6 +28,15 @@ export const getStreamModeSplitPattern = (
 
   if (proxyProvider === GOOGLE) {
     splitPattern = '\r\n';
+  }
+
+  // Real SSE from the Code Assist daily fleet, unlike every other provider
+  // here, delimits events with a CRLF pair rather than a bare \n\n — verified
+  // from a live stream, where the default pattern never matched and let
+  // multiple "data: {...}" events pile up in one buffered chunk, breaking
+  // JSON.parse on the second one.
+  if (proxyProvider === GOOGLE_ANTIGRAVITY) {
+    splitPattern = '\r\n\r\n';
   }
 
   // In Vertex Anthropic and LLama have \n\n as the pattern only Gemini has \r\n\r\n
