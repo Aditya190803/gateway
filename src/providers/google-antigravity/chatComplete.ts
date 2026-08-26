@@ -86,11 +86,19 @@ export const GoogleAntigravityChatCompleteConfig: ProviderConfig = {
     default: (_params: Params, providerOptions: Options) =>
       providerOptions.antigravityProjectId ?? '',
   },
+  // The wire value is a proto enum (google.internal.cloud.code.v1internal
+  // exa.api_server_pb.ChatMessageRequestType — CASCADE/GENERAL/PLAN/etc, not
+  // a free string), confirmed from the real Antigravity CLI binary's
+  // embedded descriptors. `agent` matched no member, which is a plausible
+  // reason every generateContent call landed in whatever bucket an
+  // unrecognized/UNSPECIFIED request type gets routed to.
   antigravity_request_type: {
     param: 'requestType',
     required: true,
     default: (params: Params) =>
-      isImageModel(params.model) ? 'image_gen' : 'agent',
+      isImageModel(params.model)
+        ? 'image_gen'
+        : 'CHAT_MESSAGE_REQUEST_TYPE_CASCADE',
   },
   antigravity_request_id: {
     param: 'requestId',

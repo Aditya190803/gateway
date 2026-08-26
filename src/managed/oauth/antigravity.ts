@@ -76,14 +76,22 @@ const SCOPES = [
   'https://www.googleapis.com/auth/experimentsandconfigs',
 ].join(' ');
 
-const API_BASE = 'https://cloudcode-pa.googleapis.com';
+/**
+ * The real Antigravity CLI (`agy`) talks to the *daily* fleet for every
+ * call it makes — loadCodeAssist, fetchAvailableModels, and
+ * streamGenerateContent alike, confirmed from its own request logs. It
+ * never hits `cloudcode-pa.googleapis.com` (the plain production host,
+ * previously used here) at all; that host is apparently not what a
+ * `free-tier`/`Antigravity`-tier account is actually entitled to hit.
+ */
+const API_BASE = 'https://daily-cloudcode-pa.googleapis.com';
 /**
  * Quota is served by the daily and sandbox fleets as well as production, and
  * which one answers for a given account varies. Tried in order.
  */
 const QUOTA_BASES = [
   API_BASE,
-  'https://daily-cloudcode-pa.googleapis.com',
+  'https://cloudcode-pa.googleapis.com',
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
 ];
 

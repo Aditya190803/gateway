@@ -4,11 +4,12 @@ import { ProviderAPIConfig } from '../types';
  * Antigravity's Code Assist backend.
  *
  * The credential layer normally overrides this with the base URL the adapter
- * reports (src/managed/oauth/antigravity.ts), which is how a seat pinned to the
- * daily or sandbox fleet keeps working. This value is the production default
- * for a request that arrives without one.
+ * reports (src/managed/oauth/antigravity.ts). This value is just the fallback
+ * for a request that arrives without one — kept in sync with that adapter's
+ * default (the daily fleet; the real Antigravity CLI never calls the plain
+ * `cloudcode-pa.googleapis.com` host at all).
  */
-const API_BASE = 'https://cloudcode-pa.googleapis.com';
+const API_BASE = 'https://daily-cloudcode-pa.googleapis.com';
 
 export const GoogleAntigravityApiConfig: ProviderAPIConfig = {
   getBaseURL: () => API_BASE,
